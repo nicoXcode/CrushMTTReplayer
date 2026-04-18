@@ -928,14 +928,14 @@ function drawDealerButton(ctx,seats,pos,W,H){
   const btnIdx=seats.findIndex(s=>s.pos==='BTN'); if(btnIdx<0)return;
   const{x,y}=pos[btnIdx];
 
-  // Compute angle from table center toward the BTN seat
-  const angle = Math.atan2(y - H/2, x - W/2);
+  // Normalized vector from BTN seat toward table center
+  const dx=W/2-x, dy=H/2-y;
+  const d=Math.sqrt(dx*dx+dy*dy)||1;
+  const nx=dx/d, ny=dy/d;
 
-  // Place button ON the outer gold rail of the table ellipse
-  const tRX = W*.28 - Math.max(20, W*.025);
-  const tRY = H*.26 - Math.max(15, H*.025);
-  const bx = W/2 + tRX * Math.cos(angle);
-  const by = H/2 + tRY * Math.sin(angle);
+  // Place button fixed distance from nameplate toward center
+  const dist=Math.max(30,W*.04);
+  const bx=x+nx*dist, by=y+ny*dist;
 
   const r = Math.max(9, W*.013);
 
