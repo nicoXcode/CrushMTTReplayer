@@ -932,8 +932,8 @@ function drawDealerButton(ctx,seats,pos,W,H){
   const angle = Math.atan2(y - H/2, x - W/2);
 
   // Place button ON the outer gold rail of the table ellipse
-  const tRX = W*.28 + 4;   // matches drawTable rail rx
-  const tRY = H*.26 + 3;   // matches drawTable rail ry
+  const tRX = W*.28 - Math.max(20, W*.025);
+  const tRY = H*.26 - Math.max(15, H*.025);
   const bx = W/2 + tRX * Math.cos(angle);
   const by = H/2 + tRY * Math.sin(angle);
 
