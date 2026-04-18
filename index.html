@@ -669,7 +669,10 @@ function drawBetChip(ctx,s,pos,W,H){
   const{x,y}=pos, dx=W/2-x, dy=H/2-y;
 
   const tFinal = 0.30;
+  const padding = Math.max(60, W*.05);
   let bx = x + dx*tFinal, by = y + dy*tFinal;
+  bx = Math.max(padding, Math.min(W-padding, bx));
+  by = Math.max(padding, Math.min(H-padding, by));
 
   const r  = Math.max(6, W*.0085);
   const fs = Math.max(8, W*.011);
@@ -934,8 +937,16 @@ function drawDealerButton(ctx,seats,pos,W,H){
   const nx=dx/d, ny=dy/d;
 
   // Place button fixed distance from nameplate toward center
-  const dist=Math.max(30,W*.04);
-  const bx=x+nx*dist, by=y+ny*dist;
+  const tRX = W*.28, tRY = H*.26; // inner ellipse for containment check
+  let dist=Math.max(30,W*.04);
+  let bx=x+nx*dist, by=y+ny*dist;
+  // Ensure button stays inside table ellipse; reduce dist if outside
+  while(dist > 5){
+    const ex=(bx-W/2)/tRX, ey=(by-H/2)/tRY;
+    if(ex*ex+ey*ey <= 1) break;
+    dist -= 2;
+    bx=x+nx*dist; by=y+ny*dist;
+  }
 
   const r = Math.max(9, W*.013);
 
