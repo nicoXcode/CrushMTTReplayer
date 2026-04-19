@@ -287,12 +287,130 @@ let stackMode='bb';
 
 // ── MULTI-HAND SPLITTER ─────────────────────────────────────────
 function splitHands(text){
-  // Split on double newline followed by "PokerStars Hand"
-  const parts = text.split(/\n\s*\n(?=PokerStars Hand)/);
-  return parts.map(p=>p.trim()).filter(p=>p.startsWith('PokerStars Hand'));
+  // Support both PokerStars and iPoker formats
+  const parts = text.split(/\n\s*\n(?=(?:PokerStars Hand|GAME #))/);
+  return parts.map(p=>p.trim()).filter(p=>p.startsWith('PokerStars Hand')||p.startsWith('GAME #'));
 }
 
-// ── INPUT / MODAL ───────────────────────────────────────────────
+// Convert iPoker card notation [S4 H6] → ['4s','6h']
+function convertIPokerCards(str){
+  // str like "S4 H6" or "SA S6"
+  const SUIT_MAP={S:'s',H:'h',D:'d',C:'c'};
+  const RANK_MAP={T:'T',J:'J',Q:'Q',K:'K',A:'A'};
+  return str.trim().split(/\s+/).map(c=>{
+    const suit=SUIT_MAP[c[0]]||c[0].toLowerCase();
+    const rank=c.slice(1);
+    return rank+suit;
+  });
+}
+
+// Parse iPoker hand format
+function parseIPokerHand(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
+
+  // Header: "GAME #6692898868 ... Blinds: 15/30"
+  const hm=lines[0].match(/GAME #(\d+)/);
+  if(hm) s.header.handId=hm[1];
+  const blm=lines[0].match(/Blinds:\s*([\d,]+)\/([\d,]+)/);
+  if(blm){ s.header.sb=parseFloat(blm[1].replace(',','')); s.header.bb=parseFloat(blm[2].replace(',','')); }
+  s.header.level='1'; // iPoker doesn't always show level
+
+  // Tournament
+  const tm=lines[0].match(/Tournament/); if(tm) s.header.tournament=s.header.handId;
+
+  // Seats: "Seat 5: pokerrosso (€3,012.00 in chips)  DEALER"
+  let btnSeat=-1;
+  for(const l of lines){
+    const sm=l.match(/^Seat (\d+):\s+(\S+)\s+\(€([\d,.]+)\s+in chips\)(.*)/);
+    if(sm){
+      const chips=parseFloat(sm[3].replace(/,/g,''));
+      s.seats.push({seat:+sm[1],name:sm[2],chips,stack:chips,bet:0,folded:false,allin:false,isHero:false,pos:''});
+      if(sm[4].includes('DEALER')) btnSeat=+sm[1];
+    }
+  }
+  if(btnSeat<0 && s.seats.length) btnSeat=s.seats[0].seat;
+  s.header.button=btnSeat;
+  const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===btnSeat);
+  const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
+  s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
+
+  let phase='pre', inSummary=false;
+  for(const l of lines){
+    if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
+    if(inSummary){
+      s.summaryLines.push(l);
+      // "PlayerName: Shows [SA S6] ..."
+      const shm=l.match(/^(\S+):\s+Shows\s+\[(.+?)\]/i);
+      if(shm) s.showdown[shm[1]]=convertIPokerCards(shm[2]);
+      // "PlayerName: wins €775.00"
+      const wm=l.match(/^(\S+):\s+wins\s+€([\d,.]+)/i);
+      if(wm && s.actions[phase]) s.actions[phase||'river'].push({player:wm[1],action:'wins',amount:parseFloat(wm[2].replace(/,/g,''))});
+      continue;
+    }
+
+    if(l.startsWith('*** HOLE CARDS')){ phase='preflop'; continue; }
+    if(l.startsWith('*** FLOP')){
+      // "*** FLOP *** [S8 HQ D9]"
+      const fm=l.match(/\[(.+?)\]/);
+      if(fm){ const cards=convertIPokerCards(fm[1]); s.board.push(...cards); }
+      phase='flop'; continue;
+    }
+    if(l.startsWith('*** TURN')){
+      // "*** TURN *** [DA]"
+      const tm2=l.match(/\[([SHDC][^\]]+)\]\s*$/);
+      if(tm2){ const cards=convertIPokerCards(tm2[1]); s.board.push(...cards); }
+      phase='turn'; continue;
+    }
+    if(l.startsWith('*** RIVER')){
+      const rm=l.match(/\[([SHDC][^\]]+)\]\s*$/);
+      if(rm){ const cards=convertIPokerCards(rm[1]); s.board.push(...cards); }
+      phase='river'; continue;
+    }
+
+    // "Dealt to xN1CO [S4 H6]"
+    const dm=l.match(/^Dealt to (\S+)\s+\[(.+)\]/);
+    if(dm){ s.holeCards[dm[1]]=convertIPokerCards(dm[2]); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
+
+    // Blinds: "ChiappoGirl: Post SB €15.00"
+    const sbm=l.match(/^(\S+):\s+Post SB\s+€([\d,.]+)/i);
+    if(sbm){ s.smallBlind={player:sbm[1],amount:parseFloat(sbm[2].replace(/,/g,''))}; continue; }
+    const bbm=l.match(/^(\S+):\s+Post BB\s+€([\d,.]+)/i);
+    if(bbm){ s.bigBlind={player:bbm[1],amount:parseFloat(bbm[2].replace(/,/g,''))}; continue; }
+
+    // Actions (preflop only after HOLE CARDS)
+    if(phase!=='pre'){
+      // Fold
+      if(l.match(/^(\S+):\s+Fold\s*$/i)){ const pm=l.match(/^(\S+)/); if(pm) s.actions[phase].push({player:pm[1],action:'folds',amount:0,allin:false}); continue; }
+      // Check
+      if(l.match(/^(\S+):\s+Check\s*$/i)){ const pm=l.match(/^(\S+)/); if(pm) s.actions[phase].push({player:pm[1],action:'checks',amount:0,allin:false}); continue; }
+      // Call €30.00
+      const callm=l.match(/^(\S+):\s+Call\s+€([\d,.]+)/i);
+      if(callm){ s.actions[phase].push({player:callm[1],action:'calls',amount:parseFloat(callm[2].replace(/,/g,'')),allin:false}); continue; }
+      // Bet €94.00
+      const betm=l.match(/^(\S+):\s+Bet\s+€([\d,.]+)/i);
+      if(betm){ s.actions[phase].push({player:betm[1],action:'bets',amount:parseFloat(betm[2].replace(/,/g,'')),allin:false}); continue; }
+      // Raise (NF) €60.00 — amount is total raise to
+      const raisem=l.match(/^(\S+):\s+Raise(?:\s*\([^)]*\))?\s+€([\d,.]+)/i);
+      if(raisem){ s.actions[phase].push({player:raisem[1],action:'raises',amount:parseFloat(raisem[2].replace(/,/g,'')),allin:false}); continue; }
+      // All-in variants
+      const allm=l.match(/^(\S+):\s+(?:All-In|Allin)\s+€([\d,.]+)/i);
+      if(allm){ s.actions[phase].push({player:allm[1],action:'raises all-in',amount:parseFloat(allm[2].replace(/,/g,'')),allin:true}); continue; }
+    }
+
+    // wins in non-summary (some formats)
+    const wm2=l.match(/^(\S+):\s+wins\s+€([\d,.]+)/i);
+    if(wm2 && !inSummary && s.actions[phase]) s.actions[phase].push({player:wm2[1],action:'wins',amount:parseFloat(wm2[2].replace(/,/g,''))});
+  }
+
+  s.header.ante=0;
+  return s;
+}
+
+function parseHandAuto(text){
+  if(text.startsWith('GAME #')) return parseIPokerHand(text);
+  return parseHand(text);
+}
 function loadFromInput(){
   const txt = document.getElementById('hand-input').value.trim();
   if(!txt){ alert('Incolla almeno una mano!'); return; }
@@ -300,7 +418,7 @@ function loadFromInput(){
   if(!raw.length){ alert('Nessuna mano trovata nel testo.'); return; }
   allHands = [];
   for(const r of raw){
-    try { allHands.push(parseHand(r)); } catch(e){ console.warn('Skip hand:', e.message); }
+    try { allHands.push(parseHandAuto(r)); } catch(e){ console.warn('Skip hand:', e.message); }
   }
   if(!allHands.length){ alert('Nessuna mano valida trovata.'); return; }
   document.getElementById('input-panel').style.display='none';
@@ -328,7 +446,7 @@ function addHandsFromModal(){
   if(!txt){ closeModal(); return; }
   const raw=splitHands(txt);
   let added=0;
-  for(const r of raw){ try{ allHands.push(parseHand(r)); added++; } catch(e){ console.warn(e); } }
+  for(const r of raw){ try{ allHands.push(parseHandAuto(r)); added++; } catch(e){ console.warn(e); } }
   closeModal();
   renderSidebar();
   if(added>0) alert(`${added} mano/i aggiunta/e.`);
