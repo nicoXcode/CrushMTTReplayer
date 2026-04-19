@@ -442,7 +442,6 @@ function loadFromFile(input){
   };
   reader.onerror = function(){ alert('Errore nella lettura del file.'); };
   reader.readAsText(file, 'utf-8');
-  // reset so same file can be re-loaded
   input.value = '';
 }
 
@@ -565,7 +564,7 @@ function parseHand(text){
   if(m) s.header={handId:m[1],level:m[2],sb:+m[3],bb:+m[4]};
   const tm=lines[0].match(/Tournament #(\d+)/); if(tm) s.header.tournament=tm[1];
   const bm=(lines[1]||'').match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
-  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \((\d+) in chips\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3],stack:+sm[3],bet:0,folded:false,allin:false,isHero:false,pos:''}); }
+  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \((\d+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3],stack:+sm[3],bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
   const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
@@ -1223,7 +1222,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,cards){
     ctx.restore();
   }
 
-  // ── 5. NAME + STACK (clipped to text area) ──
+  // ── 5. NAME + STACK (clipped to full text area) ──
   const textW = pw - posW - (posW ? 10 : 8);
   const textCX = plateLeft + 4 + textW/2;
   const fsName  = Math.max(11, W*.013);
@@ -1262,6 +1261,37 @@ function drawSeat(ctx,s,pos,W,H,seatAction,cards){
     ctx.fillText(fmtStack(s.stack), textCX, stackY);
   }
   ctx.restore();
+
+  // ── 6. BOUNTY BADGE — appendice centrata sotto il nameplate ──
+  if(s.bounty && s.bounty > 0){
+    const half = Math.ceil(s.bounty / 2 * 100) / 100;
+    const bLabel = '⊕ €' + half.toFixed(2);
+    const bfs = Math.max(7, W*.009);
+    ctx.save();
+    ctx.font = `700 ${bfs}px 'Segoe UI',sans-serif`;
+    const bw = ctx.measureText(bLabel).width + 10;
+    const bh = bfs * 1.6;
+    const bx = plateLeft;
+    const by = plateTop + ph + 2;          // 2px sotto il bordo inferiore del nameplate
+    // piccolo triangolino di connessione
+    ctx.beginPath();
+    ctx.moveTo(plateLeft + 4, plateTop + ph);
+    ctx.lineTo(plateLeft + 12, plateTop + ph);
+    ctx.lineTo(plateLeft + 8, plateTop + ph + 4);
+    ctx.closePath();
+    ctx.fillStyle = s.folded ? 'rgba(60,50,0,.35)' : 'rgba(90,60,0,.7)';
+    ctx.fill();
+    // pill
+    roundRect(ctx, bx, by, bw, bh, bh/2);
+    ctx.fillStyle = s.folded ? 'rgba(60,50,0,.35)' : 'rgba(90,60,0,.7)';
+    ctx.fill();
+    ctx.strokeStyle = s.folded ? 'rgba(140,100,0,.15)' : 'rgba(212,160,23,.55)';
+    ctx.lineWidth = .8; ctx.stroke();
+    ctx.fillStyle = s.folded ? '#504820' : '#f0c030';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(bLabel, bx + bw/2, by + bh/2);
+    ctx.restore();
+  }
 
   // ALL-IN badge is now drawn in drawBetChip on the chip itself
 }
