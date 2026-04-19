@@ -62,7 +62,7 @@ body {
   display:flex; align-items:center; justify-content:space-between;
 }
 #sidebar-title { font-size:11px; font-weight:700; letter-spacing:.6px; color:var(--text2); }
-#sidebar-count { font-size:10px; color:var(--text3); font-family:monospace; }
+#sidebar-count { font-size:14px; font-weight:800; color:var(--gold); font-family:monospace; }
 #hand-list { flex:1; overflow-y:auto; padding:6px; min-height:0; }
 #hand-list::-webkit-scrollbar { width:4px; }
 #hand-list::-webkit-scrollbar-track { background:transparent; }
@@ -74,11 +74,11 @@ body {
 }
 .hand-item:hover { background:var(--surface2); border-color:var(--border); }
 .hand-item.active { background:var(--surface2); border-color:var(--gold); }
-.hand-cards { display:flex; gap:2px; flex-shrink:0; }
+.hand-cards { display:flex; gap:3px; flex-shrink:0; }
 .hand-card-mini {
-  width:18px; height:24px; border-radius:3px;
+  width:34px; height:46px; border-radius:5px;
   display:flex; align-items:center; justify-content:center;
-  font-size:9px; font-weight:900; color:#fff;
+  font-size:19px; font-weight:900; color:#fff;
 }
 .hand-info { flex:1; min-width:0; }
 .hand-pos { font-size:9px; font-weight:700; letter-spacing:.4px; color:var(--text3); }
@@ -180,7 +180,7 @@ body {
   <div id="input-panel">
     <div class="logo-row">
       <div class="logo-badge">♠</div>
-      <div><div class="logo-title">MTT Crush</div><div class="logo-sub">Poker Hand Replayer — incolla una o più mani PokerStars</div></div>
+      <div><div class="logo-title">Crush MTT</div><div class="logo-sub">Poker Hand Replayer — incolla una o più mani</div></div>
     </div>
     <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px">Incolla il testo delle mani (una o più, separate da riga vuota):</label>
     <textarea id="hand-input" placeholder="Incolla qui una o più mani PokerStars (separate da riga vuota)..."></textarea>
@@ -202,6 +202,7 @@ body {
       <div id="hand-list"></div>
       <div id="sidebar-add">
         <button onclick="openModal()">+ Aggiungi mani</button>
+        <button onclick="clearHands()" style="margin-top:6px;border-color:rgba(220,50,50,.4);color:#e06060;">🗑 Cancella mani</button>
       </div>
     </div>
 
@@ -314,6 +315,14 @@ function backToInput(){
 
 function openModal(){ document.getElementById('modal-overlay').className='visible'; document.getElementById('modal-input').value=''; }
 function closeModal(){ document.getElementById('modal-overlay').className=''; }
+function clearHands(){
+  if(!allHands.length) return;
+  if(!confirm(`Cancellare tutte le ${allHands.length} mani caricate?`)) return;
+  if(timer){clearInterval(timer);timer=null;document.getElementById('play-btn').textContent='▶';}
+  allHands=[]; curHandIdx=0; gs=null; steps=[]; cur=0;
+  document.getElementById('replayer').className='';
+  document.getElementById('input-panel').style.display='block';
+}
 function addHandsFromModal(){
   const txt=document.getElementById('modal-input').value.trim();
   if(!txt){ closeModal(); return; }
@@ -450,12 +459,13 @@ function buildSteps(g){
   for(const a of g.antes){ const p=seats.find(s=>s.name===a.player); if(p){p.stack-=a.amount;p.bet+=a.amount;pot+=a.amount;} }
   // Reset bets so antes don't show as chips — pot already contains them
   for(const p of seats) p.bet=0;
-  // First visible step: SB posts
-  if(g.smallBlind){ const p=seats.find(s=>s.name===g.smallBlind.player); if(p){p.stack-=g.smallBlind.amount;p.bet=g.smallBlind.amount;pot+=g.smallBlind.amount;} snap(g.smallBlind.player,'SB',fmt(g.smallBlind.amount),'preflop'); }
-  if(g.bigBlind){ const p=seats.find(s=>s.name===g.bigBlind.player); if(p){p.stack-=g.bigBlind.amount;p.bet=g.bigBlind.amount;pot+=g.bigBlind.amount;} snap(g.bigBlind.player,'BB',fmt(g.bigBlind.amount),'preflop'); }
+  // Apply SB and BB silently first
+  if(g.smallBlind){ const p=seats.find(s=>s.name===g.smallBlind.player); if(p){p.stack-=g.smallBlind.amount;p.bet=g.smallBlind.amount;pot+=g.smallBlind.amount;} }
+  if(g.bigBlind){ const p=seats.find(s=>s.name===g.bigBlind.player); if(p){p.stack-=g.bigBlind.amount;p.bet=g.bigBlind.amount;pot+=g.bigBlind.amount;} }
+  // First visible step: both SB and BB already on table, hole cards dealt
   const hero=Object.keys(g.holeCards)[0];
-  if(hero){ shown[hero]=g.holeCards[hero]; snap(hero,'Hole cards','','preflop'); }
-  // Bets are NOT reset here — SB/BB chips stay visible all through preflop
+  if(hero){ shown[hero]=g.holeCards[hero]; }
+  snap('—','Inizio mano','','preflop');
   const bc=g.board;
   const phaseList=['preflop','flop','turn','river'];
   for(const ph of phaseList){
@@ -594,9 +604,8 @@ function renderCanvas(st){
   const pos=seatPositions(st.seats,W,H);
   drawPot(ctx,W,H,st.pot);
   drawBoard(ctx,W,H,st.board);
-  st.seats.forEach((s,i)=>drawBetChip(ctx,s,pos[i],W,H));
   st.seats.forEach((s,i)=>drawSeat(ctx,s,pos[i],W,H,st.seatActions[s.name]||null,st.shown[s.name]));
-  drawDealerButton(ctx,st.seats,pos,W,H);
+  st.seats.forEach((s,i)=>drawBetChip(ctx,s,pos[i],W,H));
   drawAllInBadges(ctx,st.seats,pos,W,H); // always on top
 }
 
@@ -668,9 +677,21 @@ function drawBetChip(ctx,s,pos,W,H){
   if(!s.bet||s.folded) return;
   const{x,y}=pos, dx=W/2-x, dy=H/2-y;
 
-  const tFinal = 0.30;
+  const minCenterDist = Math.max(55, W*.06);
+  const d = Math.sqrt(dx*dx+dy*dy)||1;
+
+  // Start with t=0.30, but ensure chip stays at least minCenterDist from table center
+  let t = 0.42;
+  let bx = x + dx*t, by = y + dy*t;
+  const chipDistFromCenter = Math.sqrt((bx-W/2)**2+(by-H/2)**2);
+  if(chipDistFromCenter < minCenterDist){
+    // Push chip further toward player until min distance satisfied
+    const tMin = 1 - minCenterDist/d;
+    t = Math.max(t, Math.min(tMin, 0.55));
+    bx = x + dx*t; by = y + dy*t;
+  }
+
   const padding = Math.max(60, W*.05);
-  let bx = x + dx*tFinal, by = y + dy*tFinal;
   bx = Math.max(padding, Math.min(W-padding, bx));
   by = Math.max(padding, Math.min(H-padding, by));
 
@@ -927,43 +948,44 @@ function chipColors(bet, bb){
   return [tiers[ti], tiers[Math.max(0,ti-1)]];
 }
 
-function drawDealerButton(ctx,seats,pos,W,H){
-  const btnIdx=seats.findIndex(s=>s.pos==='BTN'); if(btnIdx<0)return;
-  const{x,y}=pos[btnIdx];
-
-  // Normalized vector from BTN seat toward table center
-  const dx=W/2-x, dy=H/2-y;
-  const d=Math.sqrt(dx*dx+dy*dy)||1;
-  const nx=dx/d, ny=dy/d;
-
-  // Place button fixed distance from nameplate toward center
-  const tRX = W*.28, tRY = H*.26; // inner ellipse for containment check
-  let dist=Math.max(30,W*.04);
-  let bx=x+nx*dist, by=y+ny*dist;
-  // Ensure button stays inside table ellipse; reduce dist if outside
-  while(dist > 5){
-    const ex=(bx-W/2)/tRX, ey=(by-H/2)/tRY;
-    if(ex*ex+ey*ey <= 1) break;
-    dist -= 2;
-    bx=x+nx*dist; by=y+ny*dist;
-  }
-
-  const r = Math.max(9, W*.013);
-
+function drawDealerButton(ctx, seats, pos, W, H) {
+  const btnIdx = seats.findIndex(s => s.pos === 'BTN');
+  if (btnIdx < 0) return;
+  const { x, y } = pos[btnIdx];
+  const r = Math.max(9, W * .013);
+  const tRX = W * .28, tRY = H * .26;
+  // Angolo del seat BTN rispetto al centro del tavolo
+  const btnAngle = Math.atan2(y - H/2, x - W/2);
+  // Sposta il D di 50 gradi in senso orario lungo il bordo del tavolo
+  const shift = Math.PI * 50 / 180;
+  const dAngle = btnAngle + shift;
+  // Punto sul bordo interno dell'ellisse nella direzione shiftata
+  const cosA = Math.cos(dAngle), sinA = Math.sin(dAngle);
+  const ellipseDist = (tRX * tRY) / Math.sqrt(tRY*tRY*cosA*cosA + tRX*tRX*sinA*sinA);
+  // Inset per tenere D ben dentro il tavolo
+  const inset = Math.max(r * 2.5, W * .04);
+  let bx = W/2 + cosA * (ellipseDist - inset);
+  let by = H/2 + sinA * (ellipseDist - inset);
+  // Clamp dentro il canvas
+  const pad = r * 3;
+  bx = Math.max(pad, Math.min(W - pad, bx));
+  by = Math.max(pad, Math.min(H - pad, by));
   ctx.save();
-  ctx.shadowColor='rgba(240,220,80,.5)'; ctx.shadowBlur=8;
-  ctx.beginPath();ctx.arc(bx,by,r+1,0,Math.PI*2);ctx.fillStyle='rgba(240,220,80,.08)';ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.beginPath();ctx.arc(bx,by+1.5,r,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.55)';ctx.fill();
-  ctx.beginPath();ctx.arc(bx,by,r,0,Math.PI*2);
-  ctx.fillStyle='#f8f4e8';ctx.fill();
-  ctx.strokeStyle='#c8a420';ctx.lineWidth=2;ctx.stroke();
-  ctx.beginPath();ctx.arc(bx,by,r*.72,0,Math.PI*2);
-  ctx.strokeStyle='rgba(180,140,20,.4)';ctx.lineWidth=.5;ctx.stroke();
-  const fs=Math.max(8,r*1.0);
-  ctx.font=`900 ${fs}px 'Segoe UI',Arial,sans-serif`;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle='#1a1208';ctx.fillText('D',bx,by+.5);
+  ctx.shadowColor = 'rgba(240,220,80,.5)'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(bx, by, r + 1, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(240,220,80,.08)'; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(bx, by + 1.5, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#f8f4e8'; ctx.fill();
+  ctx.strokeStyle = '#c8a420'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(bx, by, r * .72, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(180,140,20,.4)'; ctx.lineWidth = .5; ctx.stroke();
+  const fs = Math.max(8, r * 1.0);
+  ctx.font = `900 ${fs}px 'Segoe UI',Arial,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1a1208'; ctx.fillText('D', bx, by + .5);
   ctx.restore();
 }
 
