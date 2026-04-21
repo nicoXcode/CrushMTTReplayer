@@ -145,6 +145,7 @@ body {
 .ctrl-btn:hover { background:var(--gold); border-color:var(--gold); color:#0a0c10; }
 .ctrl-btn.play { width:36px; height:36px; font-size:14px; background:var(--gold); border-color:var(--gold); color:#0a0c10; }
 .ctrl-btn.play:hover { background:var(--gold2); }
+.ctrl-btn.hand-nav { font-size:10px; letter-spacing:-.3px; width:auto; padding:0 8px; border-radius:8px; gap:3px; }
 #progress-wrap { display:flex; align-items:center; gap:6px; flex-shrink:0; }
 #step-slider { width:90px; accent-color:var(--gold); cursor:pointer; }
 #step-label  { font-size:10px; color:var(--text3); font-family:monospace; min-width:34px; }
@@ -250,6 +251,10 @@ body {
           <button class="ctrl-btn play" id="play-btn" onclick="togglePlay()">▶</button>
           <button class="ctrl-btn" onclick="step(1)">▶▶</button>
           <button class="ctrl-btn" onclick="goToStep(steps.length-1)">⏭</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx-1)" title="Mano precedente">▲ Prec</button>
+          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx+1)" title="Mano successiva">▼ Succ</button>
         </div>
         <div id="kb-hint">← → naviga · ↑ ↓ cambia mano</div>
       </div>
