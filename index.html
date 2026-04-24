@@ -74,6 +74,8 @@ body {
 }
 .hand-item:hover { background:var(--surface2); border-color:var(--border); }
 .hand-item.active { background:var(--surface2); border-color:var(--gold); }
+.hand-share-btn { flex-shrink:0; background:transparent; border:none; color:var(--text3); font-size:11px; cursor:pointer; padding:3px 5px; border-radius:5px; transition:all .15s; align-self:center; margin-left:auto; }
+.hand-share-btn:hover { color:var(--gold); background:rgba(212,160,23,.1); }
 .hand-cards { display:flex; gap:3px; flex-shrink:0; }
 .hand-card-mini {
   width:34px; height:46px; border-radius:5px;
@@ -221,6 +223,7 @@ body {
     <div id="main-area">
       <div id="top-bar">
         <div id="hand-meta">—</div>
+        <button id="share-btn" onclick="shareHand()" style="flex-shrink:0;padding:5px 14px;background:linear-gradient(135deg,#c49010,#f0c030);color:#0a0c10;border:none;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;letter-spacing:.3px;transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬆ Condividi</button>
         <div id="bb-toggle-wrap">
           <label>Stack:</label>
           <div class="toggle-group">
@@ -292,7 +295,8 @@ const SUIT_BG  = {s:'#2a2d35',h:'#c0202a',d:'#1a5fb0',c:'#1e7a3a'};
 const SUIT_BG2 = {s:'#363a44',h:'#e03040',d:'#2272cc',c:'#259048'};
 
 // ── STATE ──────────────────────────────────────────────────────
-let allHands=[];      // array of parsed hand objects
+let allHands=[];
+let allHandsRaw=[];      // array of parsed hand objects
 let curHandIdx=0;     // which hand is active
 let gs=null;          // current parsed hand
 let cur=0;            // current step index
@@ -302,9 +306,16 @@ let stackMode='bb';
 
 // ── MULTI-HAND SPLITTER ─────────────────────────────────────────
 function splitHands(text){
-  // Support both PokerStars and iPoker formats
-  const parts = text.split(/\n\s*\n(?=(?:PokerStars Hand|GAME #))/);
-  return parts.map(p=>p.trim()).filter(p=>p.startsWith('PokerStars Hand')||p.startsWith('GAME #'));
+  const hands = [];
+  const lines = text.split('\n');
+  let current = [];
+  for(const line of lines){
+    const trimmed = line.trim();
+    if(!trimmed){ if(current.length){ hands.push(current.join('\n')); current=[]; } continue; }
+    current.push(line);
+  }
+  if(current.length) hands.push(current.join('\n'));
+  return hands.filter(h => h.includes('PokerStars Hand') || h.includes('888') || h.includes('Hand History') || h.includes('GAME #'));
 }
 
 // Convert iPoker card notation [S4 H6] → ['4s','6h']
@@ -424,6 +435,7 @@ function parseIPokerHand(text){
 
 function parseHandAuto(text){
   if(text.startsWith('GAME #')) return parseIPokerHand(text);
+  if(text.includes('888') || text.includes('Hand History') || text.includes('Dealing flop') || text.includes('** Summary **')) return parseHand888(text);
   return parseHand(text);
 }
 function loadFromFile(input){
@@ -435,6 +447,7 @@ function loadFromFile(input){
     if(!txt){ alert('File vuoto o non leggibile.'); return; }
     const raw = splitHands(txt);
     if(!raw.length){ alert('Nessuna mano trovata nel file.'); return; }
+    allHandsRaw = raw;
     allHands = [];
     for(const r of raw){
       try { allHands.push(parseHandAuto(r)); } catch(err){ console.warn('Skip hand:', err.message); }
@@ -455,6 +468,7 @@ function loadFromInput(){
   if(!txt){ alert('Incolla almeno una mano!'); return; }
   const raw = splitHands(txt);
   if(!raw.length){ alert('Nessuna mano trovata nel testo.'); return; }
+  allHandsRaw = raw;
   allHands = [];
   for(const r of raw){
     try { allHands.push(parseHandAuto(r)); } catch(e){ console.warn('Skip hand:', e.message); }
@@ -464,6 +478,40 @@ function loadFromInput(){
   document.getElementById('replayer').className='visible';
   renderSidebar();
   selectHand(0);
+}
+
+function shareHandByIdx(idx, btn){
+  const handText = allHandsRaw[idx];
+  if(!handText){ alert('Testo originale non disponibile.'); return; }
+  const encoded = btoa(unescape(encodeURIComponent(handText)));
+  const url = window.location.origin + window.location.pathname + '?hand=' + encoded;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(()=>{
+      const orig = btn.textContent;
+      btn.textContent = '✓';
+      btn.style.color = 'var(--gold)';
+      setTimeout(()=>{ btn.textContent = orig; btn.style.color = ''; }, 2000);
+    });
+  } else {
+    prompt('Copia questo link:', url);
+  }
+}
+
+function shareHand(){
+  if(!gs) return;
+  const handText = allHandsRaw[curHandIdx];
+  if(!handText){ alert('Testo originale non disponibile.'); return; }
+  const encoded = btoa(unescape(encodeURIComponent(handText)));
+  const url = window.location.origin + window.location.pathname + '?hand=' + encoded;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(()=>{
+      const btn = document.getElementById('share-btn');
+      btn.textContent = '✓ Copiato!';
+      setTimeout(()=>{ btn.textContent = '⬆ Condividi'; }, 2000);
+    });
+  } else {
+    prompt('Copia questo link:', url);
+  }
 }
 
 function backToInput(){
@@ -535,6 +583,7 @@ function renderSidebar(){
         <div class="hand-blinds">${fmt(h.header.sb)}/${fmt(h.header.bb)}</div>
         <div class="hand-result ${result}">${resultTxt}</div>
       </div>
+      <button onclick="event.stopPropagation();shareHandByIdx(${i},this)" style="flex-shrink:0;padding:3px 8px;background:linear-gradient(135deg,#c49010,#f0c030);color:#0a0c10;border:none;border-radius:6px;font-size:9px;font-weight:900;cursor:pointer;letter-spacing:.3px;transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">⬆ Condividi</button>
     </div>`;
   }).join('');
 }
@@ -604,6 +653,72 @@ function parseHand(text){
 }
 
 // ── STEP BUILDER ────────────────────────────────────────────────
+function parseHand888(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
+  const blindM = text.match(/(\d+)\/(\d+)\s+Blinds/);
+  if(blindM) s.header = {...s.header, sb:+blindM[1], bb:+blindM[2]};
+  const tmM = text.match(/Tournament #(\d+)/); if(tmM) s.header.tournament=tmM[1];
+  const handM = text.match(/Game No\s*:\s*(\d+)/); if(handM) s.header.handId=handM[1];
+  s.header.level = '?';
+  const btnM = text.match(/Seat (\d+) is the button/); s.header.button = btnM ? +btnM[1] : 1;
+  for(const l of lines){
+    const sm = l.match(/^Seat (\d+):\s+(\S+)\s*\(\s*([\d,]+)\s*\)/);
+    if(sm) s.seats.push({seat:+sm[1], name:sm[2], chips:+sm[3].replace(/,/g,''), stack:+sm[3].replace(/,/g,''), bet:0, folded:false, allin:false, isHero:false, pos:'', bounty:0});
+  }
+  const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
+  const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
+  s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
+  let ante0=0, phase='pre';
+  for(const l of lines){
+    const am = l.match(/^(\S+) posts ante \[(\d+)\]/); if(am){ s.antes.push({player:am[1],amount:+am[2]}); if(!ante0) ante0=+am[2]; continue; }
+    const sbm = l.match(/^(\S+) posts small blind \[(\d+)\]/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2]}; continue; }
+    const bbm = l.match(/^(\S+) posts big blind \[(\d+)\]/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2]}; continue; }
+    const dm = l.match(/^Dealt to (\S+)\s*\[\s*(.+?)\s*\]/);
+    if(dm){
+      const cards = dm[2].split(',').map(c=>c.trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase()));
+      s.holeCards[dm[1]]=cards;
+      const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true;
+      phase='preflop'; continue;
+    }
+    if(l.includes('Dealing down cards')){ phase='preflop'; continue; }
+    if(l.includes('Dealing flop')){
+      const fm=l.match(/\[\s*(.+?)\s*\]/);
+      if(fm){ const cards=fm[1].split(',').map(c=>c.trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase())); s.board.push(...cards); }
+      phase='flop'; continue;
+    }
+    if(l.includes('Dealing turn')){
+      const tm2=l.match(/\[\s*(.+?)\s*\]/);
+      if(tm2){ const c=tm2[1].trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase()); s.board.push(c); }
+      phase='turn'; continue;
+    }
+    if(l.includes('Dealing river')){
+      const rm=l.match(/\[\s*(.+?)\s*\]/);
+      if(rm){ const c=rm[1].trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase()); s.board.push(c); }
+      phase='river'; continue;
+    }
+    if(l.includes('** Summary **')){ phase='summary'; continue; }
+    if(phase==='summary'){
+      s.summaryLines.push(l);
+      const shm=l.match(/^(\S+) shows\s*\[\s*(.+?)\s*\]/);
+      if(shm){ const cards=shm[2].split(',').map(c=>c.trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase())); s.showdown[shm[1]]=cards; }
+      const wm=l.match(/(\S+) collected \[\s*([\d,]+)\s*\]/);
+      if(wm) s.actions['river'].push({player:wm[1],action:'wins',amount:+wm[2].replace(/,/g,'')});
+      continue;
+    }
+    if(phase!=='pre' && phase!=='summary'){
+      const fold=l.match(/^(\S+) folds/); if(fold){ s.actions[phase].push({player:fold[1],action:'folds',amount:0,allin:false}); continue; }
+      const check=l.match(/^(\S+) checks/); if(check){ s.actions[phase].push({player:check[1],action:'checks',amount:0,allin:false}); continue; }
+      const call=l.match(/^(\S+) calls \[([\d,]+)\]/); if(call){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:call[1],action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const bet=l.match(/^(\S+) bets \[([\d,]+)\]/); if(bet){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:bet[1],action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
+      const win=l.match(/(\S+) collected \[([\d,]+)\]/); if(win){ s.actions[phase].push({player:win[1],action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
+    }
+  }
+  s.header.ante=ante0;
+  return s;
+}
+
 function buildSteps(g){
   const out=[], seats=JSON.parse(JSON.stringify(g.seats));
   let pot=0; const board=[], shown={};
@@ -1430,6 +1545,24 @@ function fmt(n){if(!n&&n!==0)return '0';if(n>=1000000)return (n/1000000).toFixed
 
 // keyboard nav and resize handled above
 
+
+(function loadSharedHand(){
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get('hand');
+  if(!encoded) return;
+  try {
+    const handText = decodeURIComponent(escape(atob(encoded)));
+    const raw = splitHands(handText);
+    if(!raw.length) return;
+    allHandsRaw = raw;
+    for(const r of raw){
+      try { allHands.push(parseHandAuto(r)); } catch(e){ console.warn(e); }
+    }
+    if(!allHands.length) return;
+    document.getElementById('input-panel').style.display='none';
+    document.getElementById('replayer').className='visible';
+    renderSidebar();
+    selectHand(0);
+  } catch(e){ console.warn('Errore caricamento mano condivisa:', e); }
+})();
 </script>
-</body>
-</html>
