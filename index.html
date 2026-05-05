@@ -315,7 +315,13 @@ function splitHands(text){
     current.push(line);
   }
   if(current.length) hands.push(current.join('\n'));
-  return hands.filter(h => h.includes('PokerStars Hand') || h.includes('888') || h.includes('Hand History') || h.includes('GAME #'));
+  return hands.filter(h =>
+    h.includes('PokerStars Hand') ||
+    h.includes('888') ||
+    h.includes('Hand History') ||
+    h.includes('Poker Hand #') ||
+    h.includes('GAME #')
+  );
 }
 
 // Convert iPoker card notation [S4 H6] → ['4s','6h']
@@ -435,6 +441,7 @@ function parseIPokerHand(text){
 
 function parseHandAuto(text){
   if(text.startsWith('GAME #')) return parseIPokerHand(text);
+  if(text.includes('Poker Hand #')) return parseHandGG(text);
   if(text.includes('888') || text.includes('Hand History') || text.includes('Dealing flop') || text.includes('** Summary **')) return parseHand888(text);
   return parseHand(text);
 }
@@ -713,6 +720,66 @@ function parseHand888(text){
       const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
       const bet=l.match(/^(\S+) bets \[([\d,]+)\]/); if(bet){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:bet[1],action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
       const win=l.match(/(\S+) collected \[([\d,]+)\]/); if(win){ s.actions[phase].push({player:win[1],action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
+    }
+  }
+  s.header.ante=ante0;
+  return s;
+}
+
+function parseHandGG(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
+  const handM = text.match(/Poker Hand #(\S+):/); if(handM) s.header.handId=handM[1];
+  const tmM = text.match(/Tournament #(\d+)/); if(tmM) s.header.tournament=tmM[1];
+  const blindM = text.match(/Level\d*\(?([\d,]+)\/([\d,]+)/);
+  if(blindM){ s.header.sb=+blindM[1].replace(/,/g,''); s.header.bb=+blindM[2].replace(/,/g,''); }
+  const levelM = text.match(/Level(\d+)/); s.header.level = levelM ? levelM[1] : '?';
+  const btnM = text.match(/Seat #(\d+) is the button/); s.header.button = btnM ? +btnM[1] : 1;
+  const anteM = text.match(/\([\d,]+\/[\d,]+\(([\d,]+)\)\)/);
+  if(anteM) s.header.ante = +anteM[1].replace(/,/g,'');
+  for(const l of lines){
+    const sm = l.match(/^Seat (\d+):\s+(.+?)\s*\(([\d,]+) in chips\)/);
+    if(sm) s.seats.push({seat:+sm[1],name:sm[2].trim(),chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:sm[2].trim()==='Hero',pos:'',bounty:0});
+  }
+  const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
+  const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
+  s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
+  let ante0=0, phase='pre';
+  for(const l of lines){
+    const am=l.match(/^(.+?): posts the ante ([\d,]+)/);
+    if(am){ s.antes.push({player:am[1],amount:+am[2].replace(/,/g,'')}); if(!ante0) ante0=+am[2].replace(/,/g,''); continue; }
+    const sbm=l.match(/^(.+?): posts small blind ([\d,]+)/);
+    if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
+    const bbm=l.match(/^(.+?): posts big blind ([\d,]+)/);
+    if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
+    if(l.match(/^HOLE CARDS/)){ phase='preflop'; continue; }
+    if(l.match(/^FLOP\s*\[/)){ const fm=l.match(/\[(.+?)\]/); if(fm) s.board.push(...fm[1].split(' ').filter(Boolean)); phase='flop'; continue; }
+    if(l.match(/^TURN\s*\[/)){ const tm=l.match(/\[[\w\s]+\]\s*\[(\w+)\]/); if(tm) s.board.push(tm[1]); phase='turn'; continue; }
+    if(l.match(/^RIVER\s*\[/)){ const rm=l.match(/\[[\w\s]+\]\s*\[(\w+)\]/); if(rm) s.board.push(rm[1]); phase='river'; continue; }
+    if(l.match(/^SHOWDOWN/)){ phase='showdown'; continue; }
+    if(l.match(/^SUMMARY/)){ phase='summary'; continue; }
+    const dm=l.match(/^Dealt to (.+?)\s*\[(.+)\]/);
+    if(dm && dm[2].trim()){ const cards=dm[2].trim().split(/\s+/); s.holeCards[dm[1].trim()]=cards; const h=s.seats.find(x=>x.name===dm[1].trim()); if(h) h.isHero=true; continue; }
+    if(phase==='summary'){
+      s.summaryLines.push(l);
+      const shm=l.match(/^Seat \d+: (.+?) showed \[(.+?)\] and (?:won|lost)/);
+      if(shm){ s.showdown[shm[1].trim()]=shm[2].split(' ').filter(Boolean); }
+      continue;
+    }
+    if(phase==='showdown'){
+      const shm=l.match(/^(.+?): shows \[(.+?)\]/);
+      if(shm){ s.showdown[shm[1].trim()]=shm[2].split(' ').filter(Boolean); }
+      const wm=l.match(/^(.+?) collected ([\d,]+) from/);
+      if(wm){ s.actions['river'].push({player:wm[1].trim(),action:'wins',amount:+wm[2].replace(/,/g,'')}); }
+      continue;
+    }
+    if(phase!=='pre' && phase!=='summary' && phase!=='showdown'){
+      const fold=l.match(/^(.+?): folds/); if(fold){ s.actions[phase].push({player:fold[1].trim(),action:'folds',amount:0,allin:false}); continue; }
+      const check=l.match(/^(.+?): checks/); if(check){ s.actions[phase].push({player:check[1].trim(),action:'checks',amount:0,allin:false}); continue; }
+      const call=l.match(/^(.+?): calls ([\d,]+)/); if(call){ const ai=l.includes('all-in'); s.actions[phase].push({player:call[1].trim(),action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(.+?): raises [\d,]+ to ([\d,]+)/); if(raise){ const ai=l.includes('all-in'); s.actions[phase].push({player:raise[1].trim(),action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const bet=l.match(/^(.+?): bets ([\d,]+)/); if(bet){ const ai=l.includes('all-in'); s.actions[phase].push({player:bet[1].trim(),action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
+      const win=l.match(/^(.+?) collected ([\d,]+) from/); if(win){ s.actions[phase].push({player:win[1].trim(),action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
     }
   }
   s.header.ante=ante0;
