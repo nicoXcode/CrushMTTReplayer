@@ -445,7 +445,9 @@ function parseIPokerHand(text){
 function parseHandAuto(text){
   if(text.startsWith('GAME #')) return parseIPokerHand(text);
   if(text.includes('Poker Hand #')) return parseHandGG(text);
-  if(text.includes('888') || text.includes('Hand History') || text.includes('Dealing flop') || text.includes('** Summary **')) return parseHand888(text);
+  // Check 888/Hand History only on the first line to avoid false positives from chip counts
+  const firstLine = text.split('\n')[0];
+  if(firstLine.includes('888') || firstLine.includes('Hand History') || text.includes('Dealing flop') || text.includes('** Summary **')) return parseHand888(text);
   // PokerStars and Sisal share the same format
   return parseHand(text);
 }
@@ -1631,7 +1633,7 @@ function drawFoldedCard(ctx,x,y,w,h){
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();}
 function fmt(n){if(!n&&n!==0)return '0';if(n>=1000000)return (n/1000000).toFixed(1)+'M';if(n>=1000)return (n/1000).toFixed(1)+'k';return String(n);}
 
-// keyboard nav and resize handled above  
+// keyboard nav and resize handled above
 
 
 (function loadSharedHand(){
