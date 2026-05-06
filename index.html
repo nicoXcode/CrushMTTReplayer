@@ -663,7 +663,7 @@ function parseHand(text){
       const ai=l.includes('and is all-in');
       s.actions[phase].push({player:acm[1],action:act+(ai?' all-in':''),amount:amt,allin:ai});
     }
-    const cm=l.match(/^(\S+) collected (\d+) from/); if(cm&&s.actions[phase]) s.actions[phase].push({player:cm[1],action:'wins',amount:+cm[2]});
+        const cm=l.match(/^(\S+)\s+collected\s+([\d,]+)\s+from/); if(cm&&s.actions[phase]) s.actions[phase].push({player:cm[1],action:'wins',amount:+cm[2].replace(/,/g,'')});
   }
   s.header.ante=ante0; return s;
 }
