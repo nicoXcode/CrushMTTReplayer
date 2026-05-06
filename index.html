@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- v1778085277 -->
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -628,13 +629,14 @@ function selectHand(idx){
 
 // ── PARSER ──────────────────────────────────────────────────────
 function parseHand(text){
+  console.log('[parseHand] running v2 - lines:', text.split('\n').length);
   const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
   const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
   const m=lines[0].match(/(?:PokerStars|Sisal) Hand #(\d+).*Level\s+([IVXLCDM]+)\s+\((\d+)\/(\d+)\)/);
   if(m) s.header={handId:m[1],level:m[2],sb:+m[3],bb:+m[4]};
   const tm=lines[0].match(/Tournament #(\d+)/); if(tm) s.header.tournament=tm[1];
-  const bm=(lines[1]||'').match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
-  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \((\d+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3],stack:+sm[3],bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
+  const bm=(lines[1]||'').match(/Seat #(\d+) is the button/)||text.match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
+  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
   const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
@@ -648,20 +650,30 @@ function parseHand(text){
     if(l.startsWith('*** RIVER')){ const r2=l.match(/\[.*?\] \[(\S+)\]/); if(r2) s.board.push(r2[1]); phase='river'; continue; }
     const dm=l.match(/^Dealt to (\S+) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
     const inlineShow=l.match(/^(\S+): shows \[(.+)\]/); if(inlineShow) s.showdown[inlineShow[1]]=inlineShow[2].split(' ');
-    const am=l.match(/^(\S+): posts the ante (\d+)/); if(am){ s.antes.push({player:am[1],amount:+am[2]}); if(!ante0) ante0=+am[2]; continue; }
-    const sbm=l.match(/^(\S+): posts small blind (\d+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2]}; continue; }
-    const bbm=l.match(/^(\S+): posts big blind (\d+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2]}; continue; }
-    const acm=l.match(/^(\S+): (folds|checks|calls|raises|bets)(.+)?/);
+    const am=l.match(/^(\S+?)(?::| ) posts (?:the )?ante ([\d,]+)/); if(am){ s.antes.push({player:am[1],amount:+am[2].replace(/,/g,'')}); if(!ante0) ante0=+am[2].replace(/,/g,''); continue; }
+    const sbm=l.match(/^(\S+?)(?::| ) posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
+    const bbm=l.match(/^(\S+?)(?::| ) posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
+    if(l.match(/^Uncalled bet/)) continue;
+    if(l.match(/doesn't show hand/)) continue;
+    if(l.match(/is sitting out/)) continue;
+    if(l.match(/is disconnected/)) continue;
+    if(l.match(/is connected/)) continue;
+    if(l.match(/has returned/)) continue;
+    if(l.match(/will be allowed to play/)) continue;
+    if(l.match(/out of hand/)) continue;
+    if(l.match(/moved from another table/)) continue;
+    const acm=l.match(/^(\S+?)(?::| ) (folds|checks|calls|raises|bets)(.+)?/);
     if(acm&&phase!=='pre'){
+      const acmPlayer=acm[1];
       let act=acm[2],amt=0;
       if(acm[3]){
         // For raises: "raises 25000 to 50000" — capture the final 'to X' amount
-        const toMatch=acm[3].match(/\bto\s+(\d+)/);
-        if(toMatch) amt=+toMatch[1];
-        else{ const nx=acm[3].match(/(\d+)/); if(nx) amt=+nx[1]; }
+        const toMatch=acm[3].match(/\bto\s+([\d,]+)/);
+        if(toMatch) amt=+toMatch[1].replace(/,/g,'');
+        else{ const nx=acm[3].match(/([\d,]+)/); if(nx) amt=+nx[1].replace(/,/g,''); }
       }
       const ai=l.includes('and is all-in');
-      s.actions[phase].push({player:acm[1],action:act+(ai?' all-in':''),amount:amt,allin:ai});
+      s.actions[phase].push({player:acmPlayer,action:act+(ai?' all-in':''),amount:amt,allin:ai});
     }
         const cm=l.match(/^(\S+)\s+collected\s+([\d,]+)\s+from/); if(cm&&s.actions[phase]) s.actions[phase].push({player:cm[1],action:'wins',amount:+cm[2].replace(/,/g,'')});
   }
