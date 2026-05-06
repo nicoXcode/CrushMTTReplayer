@@ -306,8 +306,9 @@ let stackMode='bb';
 
 // ── MULTI-HAND SPLITTER ─────────────────────────────────────────
 function splitHands(text){
+  const cleaned = text.replace(/\*{5,}.*?#\s*\d+.*?\*{5,}/g, '');
   const hands = [];
-  const lines = text.split('\n');
+  const lines = cleaned.split('\n');
   let current = [];
   for(const line of lines){
     const trimmed = line.trim();
@@ -317,6 +318,7 @@ function splitHands(text){
   if(current.length) hands.push(current.join('\n'));
   return hands.filter(h =>
     h.includes('PokerStars Hand') ||
+    h.includes('Sisal Hand') ||
     h.includes('888') ||
     h.includes('Hand History') ||
     h.includes('Poker Hand #') ||
@@ -443,6 +445,7 @@ function parseHandAuto(text){
   if(text.startsWith('GAME #')) return parseIPokerHand(text);
   if(text.includes('Poker Hand #')) return parseHandGG(text);
   if(text.includes('888') || text.includes('Hand History') || text.includes('Dealing flop') || text.includes('** Summary **')) return parseHand888(text);
+  // PokerStars and Sisal share the same format
   return parseHand(text);
 }
 function loadFromFile(input){
@@ -583,7 +586,13 @@ function renderSidebar(){
       return `<div class="hand-card-mini" style="background:${bg}">${rank}</div>`;
     }).join('');
     const posCol = POS_COLOR[pos]||'#888';
-    return `<div class="hand-item${i===curHandIdx?' active':''}" onclick="selectHand(${i})">
+    const played = (()=>{
+      const hero = Object.keys(h.holeCards)[0];
+      if(!hero) return false;
+      const allActions = [...(h.actions.preflop||[]),...(h.actions.flop||[]),...(h.actions.turn||[]),...(h.actions.river||[])];
+      return allActions.some(a => a.player===hero && (a.action.includes('calls')||a.action.includes('raises')||a.action.includes('bets')));
+    })();
+    return `<div class="hand-item${i===curHandIdx?' active':''}" onclick="selectHand(${i})" style="${played && i!==curHandIdx ? 'border-color:#4a90d9;box-shadow:inset 0 0 0 1px #4a90d933;' : ''}">
       <div class="hand-cards">${cardsHtml}</div>
       <div class="hand-info">
         <div class="hand-pos" style="color:${posCol}">${pos} · Lv ${romanToArabic(h.header.level)}</div>
@@ -621,7 +630,7 @@ function selectHand(idx){
 function parseHand(text){
   const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
   const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
-  const m=lines[0].match(/Hand #(\d+).*Level\s+([IVXLCDM]+)\s+\((\d+)\/(\d+)\)/);
+  const m=lines[0].match(/(?:PokerStars|Sisal) Hand #(\d+).*Level\s+([IVXLCDM]+)\s+\((\d+)\/(\d+)\)/);
   if(m) s.header={handId:m[1],level:m[2],sb:+m[3],bb:+m[4]};
   const tm=lines[0].match(/Tournament #(\d+)/); if(tm) s.header.tournament=tm[1];
   const bm=(lines[1]||'').match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
