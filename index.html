@@ -628,6 +628,7 @@ function selectHand(idx){
     (h.tournament?` &nbsp;·&nbsp; Torneo #${h.tournament}`:'');
   // update sidebar highlight
   document.querySelectorAll('.hand-item').forEach((el,i)=>{ el.className='hand-item'+(i===idx?' active':''); });
+  document.querySelectorAll('.hand-num').forEach((el,i)=>{ el.className='hand-num'+(i===idx?' active':''); });
   // scroll sidebar item into view
   const activeEl=document.querySelectorAll('.hand-item')[idx];
   if(activeEl) activeEl.scrollIntoView({block:'nearest',behavior:'smooth'});
