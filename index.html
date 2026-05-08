@@ -467,7 +467,7 @@ function loadFromFile(input){
     allHandsRaw = raw;
     allHands = [];
     for(const r of raw){
-      try { allHands.push(parseHandAuto(r)); } catch(err){ console.warn('Skip hand:', err.message); }
+      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(err){ console.warn('Skip hand:', err.message); }
     }
     if(!allHands.length){ alert('Nessuna mano valida trovata nel file.'); return; }
     document.getElementById('input-panel').style.display='none';
@@ -488,7 +488,7 @@ function loadFromInput(){
   allHandsRaw = raw;
   allHands = [];
   for(const r of raw){
-    try { allHands.push(parseHandAuto(r)); } catch(e){ console.warn('Skip hand:', e.message); }
+    try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn('Skip hand:', e.message); }
   }
   if(!allHands.length){ alert('Nessuna mano valida trovata.'); return; }
   document.getElementById('input-panel').style.display='none';
@@ -550,7 +550,7 @@ function addHandsFromModal(){
   if(!txt){ closeModal(); return; }
   const raw=splitHands(txt);
   let added=0;
-  for(const r of raw){ try{ allHands.push(parseHandAuto(r)); added++; } catch(e){ console.warn(e); } }
+  for(const r of raw){ try{ const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); added++; } catch(e){ console.warn(e); } }
   closeModal();
   renderSidebar();
   if(added>0) alert(`${added} mano/i aggiunta/e.`);
@@ -684,14 +684,6 @@ function parseHand(text){
       s.actions[phase].push({player:acmPlayer,action:act+(ai?' all-in':''),amount:amt,allin:ai});
     }
         const cm=l.match(/^(\S+)\s+collected\s+([\d,]+)\s+from/); if(cm&&s.actions[phase]) s.actions[phase].push({player:cm[1],action:'wins',amount:+cm[2].replace(/,/g,'')});
-  }
-  // If no hero detected via Dealt to, try matching from previous loaded hands
-  if(!Object.keys(s.holeCards).length && allHands.length){
-    const prevHero = Object.keys(allHands[allHands.length-1].holeCards||{})[0];
-    if(prevHero){
-      const heroSeat = s.seats.find(x=>x.name===prevHero);
-      if(heroSeat) heroSeat.isHero=true;
-    }
   }
   s.header.ante=ante0; return s;
 }
@@ -1660,7 +1652,7 @@ function fmt(n){if(!n&&n!==0)return '0';if(n>=1000000)return (n/1000000).toFixed
     if(!raw.length) return;
     allHandsRaw = raw;
     for(const r of raw){
-      try { allHands.push(parseHandAuto(r)); } catch(e){ console.warn(e); }
+      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn(e); }
     }
     if(!allHands.length) return;
     document.getElementById('input-panel').style.display='none';
