@@ -685,6 +685,14 @@ function parseHand(text){
     }
         const cm=l.match(/^(\S+)\s+collected\s+([\d,]+)\s+from/); if(cm&&s.actions[phase]) s.actions[phase].push({player:cm[1],action:'wins',amount:+cm[2].replace(/,/g,'')});
   }
+  // If no hero detected via Dealt to, try matching from previous loaded hands
+  if(!Object.keys(s.holeCards).length && allHands.length){
+    const prevHero = Object.keys(allHands[allHands.length-1].holeCards||{})[0];
+    if(prevHero){
+      const heroSeat = s.seats.find(x=>x.name===prevHero);
+      if(heroSeat) heroSeat.isHero=true;
+    }
+  }
   s.header.ante=ante0; return s;
 }
 
