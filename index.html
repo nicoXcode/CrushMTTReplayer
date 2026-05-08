@@ -1372,9 +1372,13 @@ function drawPot(ctx,W,H,pot){
   ctx.font = `700 ${fs}px 'Segoe UI',Arial,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(potLabel).width;
-  roundRect(ctx, W/2-tw/2-8, cy-fs*.75, tw+16, fs*1.5, 5);
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.88)';
+  const ph = fs*1.5, pw = tw+16;
+  const px = W/2-pw/2, py = cy-ph/2;
+  // Strong opaque background to beat the logo underneath
+  roundRect(ctx, px, py, pw, ph, ph/2);
+  ctx.fillStyle = 'rgba(0,0,0,.88)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(212,160,23,.65)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.95)';
   ctx.fillText(potLabel, W/2, cy);
   ctx.restore();
 }
