@@ -1045,17 +1045,23 @@ function drawBetChip(ctx,s,pos,W,H){
   if(!s.bet||s.folded) return;
   const{x,y}=pos, dx=W/2-x, dy=H/2-y;
 
-  const minCenterDist = Math.max(55, W*.06);
+  // Pot pill occupies center area: keep chips clear of it
+  const potPillH = Math.max(20, H*.04);
+  const potCY = H/2 - H*.13;
+  const minCenterDist = Math.max(70, W*.09);
   const d = Math.sqrt(dx*dx+dy*dy)||1;
 
-  // Start with t=0.30, but ensure chip stays at least minCenterDist from table center
+  // Start at t=0.42 (between player and center)
   let t = 0.42;
   let bx = x + dx*t, by = y + dy*t;
+
+  // Check distance from center AND from pot pill area
   const chipDistFromCenter = Math.sqrt((bx-W/2)**2+(by-H/2)**2);
-  if(chipDistFromCenter < minCenterDist){
-    // Push chip further toward player until min distance satisfied
+  const chipNearPot = Math.abs(by - potCY) < potPillH*1.8 && Math.abs(bx - W/2) < W*.15;
+
+  if(chipDistFromCenter < minCenterDist || chipNearPot){
     const tMin = 1 - minCenterDist/d;
-    t = Math.max(t, Math.min(tMin, 0.55));
+    t = Math.max(t, Math.min(tMin, 0.62));
     bx = x + dx*t; by = y + dy*t;
   }
 
