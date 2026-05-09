@@ -1045,17 +1045,19 @@ function drawBetChip(ctx,s,pos,W,H){
   if(!s.bet||s.folded) return;
   const{x,y}=pos, dx=W/2-x, dy=H/2-y;
 
+  const minCenterDist = Math.max(55, W*.06);
   const d = Math.sqrt(dx*dx+dy*dy)||1;
 
-  // Keep chip at fixed absolute distance from player, not from center.
-  // chipOffset = how far from the seat toward center the chip sits (in px).
-  // Closer seats (top/bottom) have smaller d, so same t puts chip near center.
-  // Use a fixed px offset instead: chip always sits ~chipPx pixels from seat.
-  // Fixed px offset from seat: smaller for close seats, larger for far seats
-  // This keeps chips visually near the player regardless of table position
-  const chipPx = Math.max(28, Math.min(55, d * 0.22));
-  const t = chipPx / d;
+  // Start with t=0.30, but ensure chip stays at least minCenterDist from table center
+  let t = 0.42;
   let bx = x + dx*t, by = y + dy*t;
+  const chipDistFromCenter = Math.sqrt((bx-W/2)**2+(by-H/2)**2);
+  if(chipDistFromCenter < minCenterDist){
+    // Push chip further toward player until min distance satisfied
+    const tMin = 1 - minCenterDist/d;
+    t = Math.max(t, Math.min(tMin, 0.55));
+    bx = x + dx*t; by = y + dy*t;
+  }
 
   const padding = Math.max(60, W*.05);
   bx = Math.max(padding, Math.min(W-padding, bx));
@@ -1364,13 +1366,9 @@ function drawPot(ctx,W,H,pot){
   ctx.font = `700 ${fs}px 'Segoe UI',Arial,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(potLabel).width;
-  const ph = fs*1.5, pw = tw+16;
-  const px = W/2-pw/2, py = cy-ph/2;
-  // Strong opaque background to beat the logo underneath
-  roundRect(ctx, px, py, pw, ph, ph/2);
-  ctx.fillStyle = 'rgba(0,0,0,.88)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(212,160,23,.65)'; ctx.lineWidth = 1.2; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.95)';
+  roundRect(ctx, W/2-tw/2-8, cy-fs*.75, tw+16, fs*1.5, 5);
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
   ctx.fillText(potLabel, W/2, cy);
   ctx.restore();
 }
