@@ -1420,26 +1420,24 @@ function drawDealerButton(ctx, seats, pos, W, H) {
   ctx.restore();
 }
 
-function drawPot(ctx,W,H,pot){
+function drawPot(ctx, W, H, pot){
   if(!pot) return;
-  const potLabel = stackMode==='bb'&&gs ? (pot/(gs.header.bb||1)).toFixed(1)+' BB' : 'Pot: '+fmt(pot);
-  const cy = H/2 - H*.13;
+  const value = stackMode==='bb'&&gs ? (pot/(gs.header.bb||1)).toFixed(1)+' BB' : fmt(pot);
+  const potLabel = 'POT  ' + value;
+  const cx = W * 0.5, cy = H * 0.1;
   const fs = Math.max(14, W*.016);
   ctx.save();
   ctx.font = `700 ${fs}px 'Segoe UI',Arial,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(potLabel).width;
   const ph = fs*1.5, pw = tw+16;
-  const px = W/2-pw/2, py = cy-ph/2;
-  // Strong opaque background to beat the logo underneath
-  roundRect(ctx, px, py, pw, ph, ph/2);
+  roundRect(ctx, cx-pw/2, cy-ph/2, pw, ph, ph/2);
   ctx.fillStyle = 'rgba(0,0,0,.88)'; ctx.fill();
   ctx.strokeStyle = 'rgba(212,160,23,.65)'; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.95)';
-  ctx.fillText(potLabel, W/2, cy);
+  ctx.fillText(potLabel, cx, cy);
   ctx.restore();
 }
-
 function drawBoard(ctx,W,H,board){
   if(!board||!board.length)return;
   const cw=Math.max(40,W*.062),ch=cw*1.37,gap=5,total=5*(cw+gap)-gap;
