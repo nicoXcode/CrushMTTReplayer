@@ -46,8 +46,8 @@ body {
 .btn-primary:hover { opacity:.88; } .btn-primary:active { transform:scale(.97); }
 
 /* ── REPLAYER: fills full height, fixed chrome ── */
-#replayer { display:none; gap:12px; width:100%; height:100%; }
-#replayer.visible { display:flex; width:100%; height:100vh; align-items:stretch; }
+#replayer { display:none; gap:0; width:100%; height:100%; }
+#replayer.visible { display:flex; width:100%; height:100vh; align-items:stretch; padding:0; }
 
 /* ── SIDEBAR — fixed width, full height, px sizes ── */
 #sidebar {
@@ -977,87 +977,149 @@ function renderCanvas(st){
   drawAllInBadges(ctx,st.seats,pos,W,H); // always on top
 }
 
-function drawTable(ctx,W,H){
-  const cx=W/2,cy=H/2,rx=W*.28,ry=H*.26;
+function drawTable(ctx, W, H) {
+  const cx = W/2, cy = H/2;
+  const tw = W * .50;
+  const th = H * .52;
+  const cr = Math.min(tw, th) * .52;
 
-  // drop shadow
-  ctx.save();ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=50;
-  ctx.beginPath();ctx.ellipse(cx,cy+4,rx+6,ry+5,0,0,Math.PI*2);ctx.fillStyle='#000';ctx.fill();
-  ctx.restore();
-
-  // gold glow
-  ctx.save();ctx.shadowColor='rgba(212,160,23,.6)';ctx.shadowBlur=24;
-  ctx.beginPath();ctx.ellipse(cx,cy,rx+8,ry+6,0,0,Math.PI*2);ctx.strokeStyle='#d4a017';ctx.lineWidth=3;ctx.stroke();
-  ctx.restore();
-
-  // rail fill
-  ctx.beginPath();ctx.ellipse(cx,cy,rx+6,ry+5,0,0,Math.PI*2);ctx.fillStyle='#1a1400';ctx.fill();
-
-  // gold border
-  ctx.beginPath();ctx.ellipse(cx,cy,rx+4,ry+3,0,0,Math.PI*2);ctx.strokeStyle='#d4a017';ctx.lineWidth=4;ctx.stroke();
-  ctx.beginPath();ctx.ellipse(cx,cy,rx+1,ry+1,0,0,Math.PI*2);ctx.strokeStyle='rgba(240,192,48,.35)';ctx.lineWidth=1;ctx.stroke();
-
-  // ── FELT IMAGE clipped to ellipse ──
-  if(TABLE_IMG.complete && TABLE_IMG.naturalWidth){
-    ctx.save();
-    ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.clip();
-    // Scale image ~22% larger than the ellipse bounding box so the rounded
-    // corners of the image (which are grey) fall outside the ellipse clip.
-    const scale=1.22;
-    const iw=rx*2*scale, ih=ry*2*scale;
-    ctx.drawImage(TABLE_IMG, cx-iw/2, cy-ih/2, iw, ih);
-    ctx.restore();
-  } else {
-    // fallback: plain dark felt
-    ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fillStyle='#080810';ctx.fill();
+  function tableRect(ctx, cx, cy, tw, th, cr) {
+    const x = cx - tw/2, y = cy - th/2;
+    ctx.beginPath();
+    ctx.moveTo(x + cr, y);
+    ctx.lineTo(x + tw - cr, y);
+    ctx.arcTo(x + tw, y, x + tw, y + cr, cr);
+    ctx.lineTo(x + tw, y + th - cr);
+    ctx.arcTo(x + tw, y + th, x + tw - cr, y + th, cr);
+    ctx.lineTo(x + cr, y + th);
+    ctx.arcTo(x, y + th, x, y + th - cr, cr);
+    ctx.lineTo(x, y + cr);
+    ctx.arcTo(x, y, x + cr, y, cr);
+    ctx.closePath();
   }
 
-  // inner vignette
-  const grd=ctx.createRadialGradient(cx,cy,ry*.3,cx,cy,rx);
-  grd.addColorStop(0,'rgba(0,0,0,0)');grd.addColorStop(1,'rgba(0,0,0,.28)');
-  ctx.save();ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.clip();
-  ctx.fillStyle=grd;ctx.fillRect(cx-rx,cy-ry,rx*2,ry*2);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 50;
+  tableRect(ctx, cx, cy + 4, tw + 12, th + 10, cr);
+  ctx.fillStyle = '#000'; ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(212,160,23,.6)'; ctx.shadowBlur = 24;
+  tableRect(ctx, cx, cy, tw + 16, th + 12, cr + 2);
+  ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.restore();
+
+  tableRect(ctx, cx, cy, tw + 12, th + 10, cr + 1);
+  ctx.fillStyle = '#1a1400'; ctx.fill();
+
+  tableRect(ctx, cx, cy, tw + 8, th + 6, cr);
+  ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 4; ctx.stroke();
+
+  tableRect(ctx, cx, cy, tw + 2, th + 2, cr - 1);
+  ctx.strokeStyle = 'rgba(240,192,48,.35)'; ctx.lineWidth = 1; ctx.stroke();
+
+  if (TABLE_IMG.complete && TABLE_IMG.naturalWidth) {
+    ctx.save();
+    tableRect(ctx, cx, cy, tw, th, cr - 3);
+    ctx.clip();
+    const scale = 1.30;
+    ctx.drawImage(TABLE_IMG, cx - tw/2 * scale, cy - th/2 * scale, tw * scale, th * scale);
+    ctx.restore();
+  } else {
+    tableRect(ctx, cx, cy, tw, th, cr - 3);
+    ctx.fillStyle = '#080810'; ctx.fill();
+  }
+
+  ctx.save();
+  tableRect(ctx, cx, cy, tw, th, cr - 3);
+  ctx.clip();
+  const grd = ctx.createRadialGradient(cx, cy, th * .1, cx, cy, tw * .7);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(1, 'rgba(0,0,0,.32)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(cx - tw/2, cy - th/2, tw, th);
   ctx.restore();
 }
-
 function seatBlockMetrics(W,H){
   const pw=Math.max(150,W*.145);
   const ph=Math.max(44,Math.min((H||500)*.060, 64)); // capped at 64px max
   const cw=Math.max(32,W*.044); const ch=cw*1.37;
   const ov=ch*0.22;
-  const tableGap=Math.max(10,W*.012);
+  const tableGap=Math.max(4,W*.006);
   const blockH=ch+ph-ov;
   return {pw,ph,cw,ch,ov,blockH,tableGap};
 }
-function seatPositions(seats,W,H){
-  const hi=seats.findIndex(s=>s.isHero),n=seats.length;
-  const{pw,blockH,tableGap,ch,ov}=seatBlockMetrics(W,H);
-  // Table is now W*.22 × H*.20
-  const tableRX=W*.28+6, tableRY=H*.26+5;
-  const PAD_X=pw/2-10;
-  const PAD_Y=blockH/2-ch+ov+tableGap-4;
-  const rx=tableRX+PAD_X;
-  const ry=tableRY+PAD_Y;
-  return seats.map((_,i)=>{ const off=(i-hi+n)%n,angle=Math.PI/2+(off/n)*Math.PI*2; return{x:W/2+Math.cos(angle)*rx,y:H/2+Math.sin(angle)*ry}; });
-}
+function seatPositions(seats, W, H) {
+  const hi = seats.findIndex(s => s.isHero), n = seats.length;
+  const { pw, blockH, tableGap, ch, ov } = seatBlockMetrics(W, H);
 
+  const tw = W * .50;
+  const th = H * .52;
+  const cr = Math.min(tw, th) * .52;
+
+  const padX = tableGap;
+  const padY = tableGap;
+  const srw = tw/2 + padX;
+  const srh = th/2 + padY;
+  const scr = Math.min(srw, srh) * .52;
+
+  const flatH = Math.max(0, 2 * srw - 2 * scr);
+  const flatV = Math.max(0, 2 * srh - 2 * scr);
+  const arcLen = 2 * Math.PI * scr;
+  const totalPerim = 2 * flatH + 2 * flatV + arcLen;
+
+  function perimPoint(t) {
+    const cx = W/2, cy = H/2;
+    const halfFlH = flatH / 2;
+
+    const segments = [
+      { len: halfFlH,       type: 'line', x0: cx,        y0: cy+srh,      dx:  1, dy:  0 },
+      { len: Math.PI/2*scr, type: 'arc',  ax: cx+srw-scr, ay: cy+srh-scr, a0: Math.PI/2,    da: -Math.PI/2 },
+      { len: flatV,         type: 'line', x0: cx+srw,    y0: cy+srh-scr,  dx:  0, dy: -1 },
+      { len: Math.PI/2*scr, type: 'arc',  ax: cx+srw-scr, ay: cy-srh+scr, a0: 0,           da: -Math.PI/2 },
+      { len: flatH,         type: 'line', x0: cx+srw-scr, y0: cy-srh,     dx: -1, dy:  0 },
+      { len: Math.PI/2*scr, type: 'arc',  ax: cx-srw+scr, ay: cy-srh+scr, a0: -Math.PI/2,  da: -Math.PI/2 },
+      { len: flatV,         type: 'line', x0: cx-srw,    y0: cy-srh+scr,  dx:  0, dy:  1 },
+      { len: Math.PI/2*scr, type: 'arc',  ax: cx-srw+scr, ay: cy+srh-scr, a0: Math.PI,     da: -Math.PI/2 },
+      { len: halfFlH,       type: 'line', x0: cx-srw+scr, y0: cy+srh,     dx:  1, dy:  0 },
+    ];
+
+    let rem = ((t % 1) + 1) % 1 * totalPerim;
+    for (const seg of segments) {
+      if (rem <= seg.len + 0.001) {
+        const f = Math.min(rem / seg.len, 1);
+        if (seg.type === 'line') {
+          return { x: seg.x0 + seg.dx * seg.len * f, y: seg.y0 + seg.dy * seg.len * f };
+        } else {
+          const angle = seg.a0 + seg.da * f;
+          return { x: seg.ax + Math.cos(angle) * scr, y: seg.ay + Math.sin(angle) * scr };
+        }
+      }
+      rem -= seg.len;
+    }
+    return { x: W/2, y: H/2 + srh };
+  }
+
+  return seats.map((_, i) => {
+    const off = (i - hi + n) % n;
+    return perimPoint(1 - off / n);
+  });
+}
 function drawBetChip(ctx,s,pos,W,H){
   if(!s.bet||s.folded) return;
   const{x,y}=pos, dx=W/2-x, dy=H/2-y;
 
-  const minCenterDist = Math.max(55, W*.06);
   const d = Math.sqrt(dx*dx+dy*dy)||1;
 
-  // Start with t=0.30, but ensure chip stays at least minCenterDist from table center
-  let t = 0.42;
+  // Keep chip at fixed absolute distance from player, not from center.
+  // chipOffset = how far from the seat toward center the chip sits (in px).
+  // Closer seats (top/bottom) have smaller d, so same t puts chip near center.
+  // Use a fixed px offset instead: chip always sits ~chipPx pixels from seat.
+  // Fixed px offset from seat: smaller for close seats, larger for far seats
+  // This keeps chips visually near the player regardless of table position
+  const t = 0.40;
   let bx = x + dx*t, by = y + dy*t;
-  const chipDistFromCenter = Math.sqrt((bx-W/2)**2+(by-H/2)**2);
-  if(chipDistFromCenter < minCenterDist){
-    // Push chip further toward player until min distance satisfied
-    const tMin = 1 - minCenterDist/d;
-    t = Math.max(t, Math.min(tMin, 0.55));
-    bx = x + dx*t; by = y + dy*t;
-  }
 
   const padding = Math.max(60, W*.05);
   bx = Math.max(padding, Math.min(W-padding, bx));
@@ -1321,7 +1383,7 @@ function drawDealerButton(ctx, seats, pos, W, H) {
   if (btnIdx < 0) return;
   const { x, y } = pos[btnIdx];
   const r = Math.max(9, W * .013);
-  const tRX = W * .28, tRY = H * .26;
+  const tRX = W * .36, tRY = H * .26;
   // Angolo del seat BTN rispetto al centro del tavolo
   const btnAngle = Math.atan2(y - H/2, x - W/2);
   // Sposta il D di 50 gradi in senso orario lungo il bordo del tavolo
@@ -1366,9 +1428,13 @@ function drawPot(ctx,W,H,pot){
   ctx.font = `700 ${fs}px 'Segoe UI',Arial,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(potLabel).width;
-  roundRect(ctx, W/2-tw/2-8, cy-fs*.75, tw+16, fs*1.5, 5);
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.88)';
+  const ph = fs*1.5, pw = tw+16;
+  const px = W/2-pw/2, py = cy-ph/2;
+  // Strong opaque background to beat the logo underneath
+  roundRect(ctx, px, py, pw, ph, ph/2);
+  ctx.fillStyle = 'rgba(0,0,0,.88)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(212,160,23,.65)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.95)';
   ctx.fillText(potLabel, W/2, cy);
   ctx.restore();
 }
