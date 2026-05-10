@@ -308,6 +308,7 @@ let cur=0;            // current step index
 let steps=[];         // steps for current hand
 let timer=null;
 let stackMode='bb';
+window.HERO_HOVER_SEAT = null;
 
 // ── MULTI-HAND SPLITTER ─────────────────────────────────────────
 function splitHands(text){
@@ -1460,7 +1461,12 @@ function drawSeat(ctx,s,pos,W,H,seatAction,cards){
   const fanA=0.10;
 
   // ── 1. CARDS ──
-  if(s.folded){
+  if(s.folded && cards && s.isHero){
+    const alpha = window.HERO_HOVER_SEAT === s.name ? 1.0 : 0.35;
+    ctx.save(); ctx.globalAlpha = alpha;
+    cards.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,false);ctx.restore(); });
+    ctx.restore();
+  } else if(s.folded){
     [-1,1].forEach(dir=>{ctx.save();ctx.translate(x+dir*cw*.48,cardCenterY);ctx.rotate(dir*fanA*.55);drawFoldedCard(ctx,0,0,cw,ch);ctx.restore();});
   } else if(cards){
     cards.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*(s.isHero?.06:.09)*fanA);drawCard(ctx,0,0,c,cw,ch,isActive&&s.isHero);ctx.restore(); });
@@ -1707,6 +1713,38 @@ function fmt(n){if(!n&&n!==0)return '0';if(n>=1000000)return (n/1000000).toFixed
 
 // keyboard nav and resize handled above
 
+
+document.getElementById('tc').addEventListener('mousemove', function(e) {
+  if(!steps.length || !gs) return;
+  const wrap = document.getElementById('canvas-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const mx = (e.clientX - rect.left);
+  const my = (e.clientY - rect.top);
+  const st = steps[cur];
+  const pos = seatPositions(st.seats, W, H);
+  const { pw, ph, cw, ch, blockH, ov } = seatBlockMetrics(W, H);
+  let found = null;
+  st.seats.forEach((s, i) => {
+    if(!s.folded || !s.isHero) return;
+    const { x, y } = pos[i];
+    const cardCenterY = y - blockH/2 + ch/2;
+    if(mx >= x - cw && mx <= x + cw && my >= cardCenterY - ch/2 && my <= cardCenterY + ch/2) {
+      found = s.name;
+    }
+  });
+  if(found !== window.HERO_HOVER_SEAT) {
+    window.HERO_HOVER_SEAT = found;
+    renderCanvas(steps[cur]);
+  }
+});
+
+document.getElementById('tc').addEventListener('mouseleave', function() {
+  if(window.HERO_HOVER_SEAT !== null) {
+    window.HERO_HOVER_SEAT = null;
+    renderCanvas(steps[cur]);
+  }
+});
 
 (function loadSharedHand(){
   const params = new URLSearchParams(window.location.search);
