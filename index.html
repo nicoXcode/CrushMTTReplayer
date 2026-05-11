@@ -290,12 +290,12 @@ const RED={h:true,d:true};
 const RANK={T:'10'};
 const POS_LABELS_BY_N={
   2:['BTN','BB'],3:['BTN','SB','BB'],4:['BTN','SB','BB','UTG'],
-  5:['BTN','SB','BB','MP','CO'],6:['BTN','SB','BB','UTG','MP','CO'],
+  5:['BTN','SB','BB','HJ','CO'],6:['BTN','SB','BB','MP','HJ','CO'],
   7:['BTN','SB','BB','UTG','MP','HJ','CO'],
   8:['BTN','SB','BB','UTG','UTG+1','MP','HJ','CO'],
   9:['BTN','SB','BB','UTG','UTG+1','UTG+2','MP','HJ','CO'],
 };
-const POS_COLOR={BTN:'#f0c040',SB:'#4090e0',BB:'#e04080',UTG:'#50c080','UTG+1':'#50c080','UTG+2':'#50c080',MP:'#a060e0',HJ:'#e06040',CO:'#40b0c0'};
+const POS_COLOR={BTN:'#f0c040',SB:'#4090e0',BB:'#e04080',UTG:'#50c080','UTG+1':'#50c080','UTG+2':'#50c080',LJ:'#a060e0',HJ:'#e06040',CO:'#40b0c0'};
 const SUIT_BG  = {s:'#2a2d35',h:'#c0202a',d:'#1a5fb0',c:'#1e7a3a'};
 const SUIT_BG2 = {s:'#363a44',h:'#e03040',d:'#2272cc',c:'#259048'};
 
@@ -652,18 +652,13 @@ function parseHand(text){
   let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
-    if(inSummary){
-      s.summaryLines.push(l);
-      const shm = l.match(/^Seat \d+: (\S+).*(?:showed|mucked) \[(.+?)\]/);
-      if(shm) s.showdown[shm[1]] = shm[2].split(' ');
-      continue;
-    }
+    if(inSummary){ s.summaryLines.push(l); const shm=l.match(/^Seat \d+: (\S+).*showed \[(.+?)\]/); if(shm) s.showdown[shm[1]]=shm[2].split(' '); continue; }
     if(l.startsWith('*** HOLE CARDS')){ phase='preflop'; continue; }
     if(l.startsWith('*** FLOP')){ const fm=l.match(/\[(.+?)\]/); if(fm) s.board.push(...fm[1].split(' ')); phase='flop'; continue; }
     if(l.startsWith('*** TURN')){ const t2=l.match(/\[.*?\] \[(\S+)\]/); if(t2) s.board.push(t2[1]); phase='turn'; continue; }
     if(l.startsWith('*** RIVER')){ const r2=l.match(/\[.*?\] \[(\S+)\]/); if(r2) s.board.push(r2[1]); phase='river'; continue; }
     const dm=l.match(/^Dealt to (\S+) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
-    const inlineShow=l.match(/^(\S+): (?:shows|mucks hand with) \[(.+)\]/); if(inlineShow) s.showdown[inlineShow[1]]=inlineShow[2].split(' ');
+    const inlineShow=l.match(/^(\S+): shows \[(.+)\]/); if(inlineShow) s.showdown[inlineShow[1]]=inlineShow[2].split(' ');
     const am=l.match(/^(\S+?)(?::| ) posts (?:the )?ante ([\d,]+)/); if(am){ s.antes.push({player:am[1],amount:+am[2].replace(/,/g,'')}); if(!ante0) ante0=+am[2].replace(/,/g,''); continue; }
     const sbm=l.match(/^(\S+?)(?::| ) posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
     const bbm=l.match(/^(\S+?)(?::| ) posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
@@ -1454,7 +1449,7 @@ function drawBoard(ctx,W,H,board){
   }
 }
 
-function drawSeat(ctx,s,pos,W,H,seatAction,shown){
+function drawSeat(ctx,s,pos,W,H,seatAction,cards){
   const{x,y}=pos;
   const isActive=seatAction!==null&&seatAction!==undefined;
   const{pw,ph,cw,ch,ov,blockH}=seatBlockMetrics(W,H);
@@ -1464,17 +1459,15 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   const fanA=0.10;
 
   // ── 1. CARDS ──
-  if(s.folded && shown && shown[s.name] && s.isHero){
+  if(s.folded && cards && s.isHero){
     const alpha = window.HERO_HOVER_SEAT === s.name ? 1.0 : 0.35;
     ctx.save(); ctx.globalAlpha = alpha;
-    shown[s.name].forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,false);ctx.restore(); });
+    cards.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,false);ctx.restore(); });
     ctx.restore();
   } else if(s.folded){
     [-1,1].forEach(dir=>{ctx.save();ctx.translate(x+dir*cw*.48,cardCenterY);ctx.rotate(dir*fanA*.55);drawFoldedCard(ctx,0,0,cw,ch);ctx.restore();});
-  } else if(shown && shown[s.name] && s.isHero){
-    shown[s.name].forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,isActive&&s.isHero);ctx.restore(); });
-  } else if(shown && shown[s.name] && !s.isHero){
-    shown[s.name].forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.09*fanA);drawCard(ctx,0,0,c,cw,ch,false);ctx.restore(); });
+  } else if(cards){
+    cards.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*(s.isHero?.06:.09)*fanA);drawCard(ctx,0,0,c,cw,ch,isActive&&s.isHero);ctx.restore(); });
   } else {
     [-1,1].forEach(dir=>{ctx.save();ctx.translate(x+dir*cw*.48,cardCenterY);ctx.rotate(dir*fanA*.65);drawFacedownCard(ctx,0,0,cw,ch);ctx.restore();});
   }
