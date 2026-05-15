@@ -498,37 +498,117 @@ function loadFromInput(){
   selectHand(0);
 }
 
-function shareHandByIdx(idx, btn){
+// ── SUPABASE SHARE ────────────────────────────────────────────
+const SUPA_URL = 'https://pvlifuefzwnddliptpnp.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2bGlmdWVmenduZGRsaXB0cG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Njg0NjAsImV4cCI6MjA5MjI0NDQ2MH0.xz6V_4VM4jukLK-mk-OBCsfRGLjVZnXkhNO8bguiWng';
+
+async function saveHandToSupabase(handText) {
+  // Generate a random 10-char alphanumeric ID
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let id = '';
+  for(let i=0;i<10;i++) id += chars[Math.floor(Math.random()*chars.length)];
+  const res = await fetch(SUPA_URL+'/rest/v1/shared_hands', {
+    method: 'POST',
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer '+SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({id, hand_text: handText})
+  });
+  if(!res.ok) throw new Error('Supabase insert failed: '+res.status);
+  return id;
+}
+
+async function loadHandFromSupabase(id) {
+  const res = await fetch(SUPA_URL+'/rest/v1/shared_hands?id=eq.'+encodeURIComponent(id)+'&select=hand_text', {
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer '+SUPA_KEY
+    }
+  });
+  if(!res.ok) throw new Error('Supabase fetch failed');
+  const data = await res.json();
+  if(!data.length) throw new Error('Hand not found');
+  return data[0].hand_text;
+}
+
+// ── COMPRESS / DECOMPRESS for share URLs ──────────────────────
+async function compressHand(text){
+  // Strip lines the parser ignores to reduce URL length
+  text = text.replace(/\s*\[ADM ID:[^\]]+\]/g,'')
+             .split('\n').filter(l=>!/^\s*(Uncalled bet|Total pot|Board \[|is sitting out|is connected|is disconnected|has returned|will be allowed|out of hand|moved from another table)/i.test(l)).join('\n');
+  const enc = new TextEncoder().encode(text);
+  const cs = new CompressionStream('deflate-raw');
+  const writer = cs.writable.getWriter();
+  writer.write(enc); writer.close();
+  const chunks = [];
+  const reader = cs.readable.getReader();
+  while(true){ const {done,value} = await reader.read(); if(done) break; chunks.push(value); }
+  const compressed = new Uint8Array(chunks.reduce((a,b)=>a+b.length,0));
+  let off=0; for(const c of chunks){ compressed.set(c,off); off+=c.length; }
+  return btoa(String.fromCharCode(...compressed)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function decompressHand(b64){
+  const bin = atob(b64.replace(/-/g,'+').replace(/_/g,'/'));
+  const bytes = Uint8Array.from(bin, c=>c.charCodeAt(0));
+  const ds = new DecompressionStream('deflate-raw');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes); writer.close();
+  const chunks = [];
+  const reader = ds.readable.getReader();
+  while(true){ const {done,value} = await reader.read(); if(done) break; chunks.push(value); }
+  const out = new Uint8Array(chunks.reduce((a,b)=>a+b.length,0));
+  let off=0; for(const c of chunks){ out.set(c,off); off+=c.length; }
+  return new TextDecoder().decode(out);
+}
+
+async function shareHandByIdx(idx, btn){
   const handText = allHandsRaw[idx];
   if(!handText){ alert('Testo originale non disponibile.'); return; }
-  const encoded = btoa(unescape(encodeURIComponent(handText)));
-  const url = window.location.origin + window.location.pathname + '?hand=' + encoded;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(()=>{
+  btn.textContent = '…';
+  try {
+    const id = await saveHandToSupabase(handText);
+    const url = window.location.origin + window.location.pathname + '?h=' + id;
+    if(navigator.clipboard){
+      await navigator.clipboard.writeText(url);
       btn.textContent = '✓';
       btn.style.color = 'var(--gold)';
       btn.style.borderColor = 'var(--gold)';
       setTimeout(()=>{ btn.textContent = '↑'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
-    });
-  } else {
-    prompt('Copia questo link:', url);
+    } else {
+      prompt('Copia questo link:', url);
+      btn.textContent = '↑';
+    }
+  } catch(e) {
+    console.error(e);
+    btn.textContent = '↑';
+    alert('Errore nella condivisione. Riprova.');
   }
 }
 
-function shareHand(){
+async function shareHand(){
   if(!gs) return;
   const handText = allHandsRaw[curHandIdx];
   if(!handText){ alert('Testo originale non disponibile.'); return; }
-  const encoded = btoa(unescape(encodeURIComponent(handText)));
-  const url = window.location.origin + window.location.pathname + '?hand=' + encoded;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(()=>{
-      const btn = document.getElementById('share-btn');
+  const btn = document.getElementById('share-btn');
+  btn.textContent = '⏳ ...';
+  try {
+    const id = await saveHandToSupabase(handText);
+    const url = window.location.origin + window.location.pathname + '?h=' + id;
+    if(navigator.clipboard){
+      await navigator.clipboard.writeText(url);
       btn.textContent = '✓ Copiato!';
       setTimeout(()=>{ btn.textContent = '⬆ Condividi'; }, 2000);
-    });
-  } else {
-    prompt('Copia questo link:', url);
+    } else {
+      prompt('Copia questo link:', url);
+      btn.textContent = '⬆ Condividi';
+    }
+  } catch(e) {
+    console.error(e);
+    btn.textContent = '⬆ Condividi';
+    alert('Errore nella condivisione. Riprova.');
   }
 }
 
@@ -698,10 +778,10 @@ function parseHand(text){
 function parseHand888(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
   const s={header:{},seats:[],antes:[],actions:{preflop:[],flop:[],turn:[],river:[]},board:[],holeCards:{},showdown:{},summaryLines:[]};
-  const blindM = text.match(/(\d+)\/(\d+)\s+Blinds/);
-  if(blindM) s.header = {...s.header, sb:+blindM[1], bb:+blindM[2]};
+  const blindM = text.match(/([\d,]+)\/([\d,]+)\s+Blinds/);
+  if(blindM) s.header = {...s.header, sb:+blindM[1].replace(/,/g,''), bb:+blindM[2].replace(/,/g,'')};
   const tmM = text.match(/Tournament #(\d+)/); if(tmM) s.header.tournament=tmM[1];
-  const handM = text.match(/Game No\s*:\s*(\d+)/); if(handM) s.header.handId=handM[1];
+  const handM = text.match(/Hand History for Game (\d+)/)||text.match(/Game No\s*:\s*(\d+)/); if(handM) s.header.handId=handM[1];
   s.header.level = '?';
   const btnM = text.match(/Seat (\d+) is the button/); s.header.button = btnM ? +btnM[1] : 1;
   for(const l of lines){
@@ -713,9 +793,9 @@ function parseHand888(text){
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
   let ante0=0, phase='pre';
   for(const l of lines){
-    const am = l.match(/^(\S+) posts ante \[(\d+)\]/); if(am){ s.antes.push({player:am[1],amount:+am[2]}); if(!ante0) ante0=+am[2]; continue; }
-    const sbm = l.match(/^(\S+) posts small blind \[(\d+)\]/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2]}; continue; }
-    const bbm = l.match(/^(\S+) posts big blind \[(\d+)\]/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2]}; continue; }
+    const am = l.match(/^(\S+) posts ante \[([\d,]+)\]/); if(am){ const a=+am[2].replace(/,/g,''); s.antes.push({player:am[1],amount:a}); if(!ante0) ante0=a; continue; }
+    const sbm = l.match(/^(\S+) posts small blind \[([\d,]+)\]/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
+    const bbm = l.match(/^(\S+) posts big blind \[([\d,]+)\]/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
     const dm = l.match(/^Dealt to (\S+)\s*\[\s*(.+?)\s*\]/);
     if(dm){
       const cards = dm[2].split(',').map(c=>c.trim().replace(/(.+)(.)/, (m,r,sv)=>r.trim()+sv.toLowerCase()));
@@ -1753,10 +1833,11 @@ document.getElementById('tc').addEventListener('mouseleave', function() {
 
 (function loadSharedHand(){
   const params = new URLSearchParams(window.location.search);
+  const shortId = params.get('h');
   const encoded = params.get('hand');
-  if(!encoded) return;
-  try {
-    const handText = decodeURIComponent(escape(atob(encoded)));
+  if(!shortId && !encoded) return;
+
+  async function loadAndDisplay(handText){
     const raw = splitHands(handText);
     if(!raw.length) return;
     allHandsRaw = raw;
@@ -1768,6 +1849,22 @@ document.getElementById('tc').addEventListener('mouseleave', function() {
     document.getElementById('replayer').className='visible';
     renderSidebar();
     selectHand(0);
-  } catch(e){ console.warn('Errore caricamento mano condivisa:', e); }
+  }
+
+  (async()=>{
+    try {
+      if(shortId){
+        // New format: load from Supabase
+        const handText = await loadHandFromSupabase(shortId);
+        await loadAndDisplay(handText);
+      } else {
+        // Old format: compressed base64 in URL
+        let handText;
+        try { handText = await decompressHand(encoded); }
+        catch(_){ handText = decodeURIComponent(escape(atob(encoded))); }
+        await loadAndDisplay(handText);
+      }
+    } catch(e){ console.warn('Errore caricamento mano condivisa:', e); }
+  })();
 })();
 </script>
