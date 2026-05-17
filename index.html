@@ -1279,7 +1279,7 @@ function drawAllInBadges(ctx, seats, pos, W, H){
     const bw = Math.max(38, W * .052);
     const bh = Math.max(13, W * .018);
     const bx = x - bw/2;
-    const by = plateTop - bh/2;
+    const by = plateTop + ph - bh/2;
 
     ctx.save();
     roundRect(ctx, bx, by, bw, bh, bh/2);
