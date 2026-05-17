@@ -906,8 +906,9 @@ function buildSteps(g){
   let pot=0; const board=[], shown={};
   function snap(activePlayer,action,amount,phase,extra){
     const seatActions={};
-    if(activePlayer&&activePlayer!=='—') seatActions[activePlayer]={action,amount};
-    out.push({activePlayer,action,amount,seats:JSON.parse(JSON.stringify(seats)),pot,board:[...board],shown:{...shown},phase:phase||'preflop',seatActions,...(extra||{})});
+    if(activePlayer&&activePlayer!=='—') seatActions[activePlayer]={action,amount,rawAmount:typeof amount==='number'?amount:0};
+    const displayAmount = (typeof amount==='number') ? fmt(amount) : (amount||'');
+    out.push({activePlayer,action,amount:displayAmount,seats:JSON.parse(JSON.stringify(seats)),pot,board:[...board],shown:{...shown},phase:phase||'preflop',seatActions,...(extra||{})});
   }
   // Apply all antes silently — pot accumulates but no steps generated
   for(const a of g.antes){ const p=seats.find(s=>s.name===a.player); if(p){p.stack-=a.amount;p.bet+=a.amount;pot+=a.amount;} }
@@ -946,13 +947,13 @@ function buildSteps(g){
       }
       if(a.allin) p.allin=true;
       let action='',amount='';
-      if(a.action.includes('calls')){action='Call';amount=fmt(a.amount);}
-      else if(a.action.includes('raises')){action=a.allin?'Raise ALL-IN':'Raise';amount=fmt(a.amount);}
-      else if(a.action.includes('bets')){action=a.allin?'Bet ALL-IN':'Bet';amount=fmt(a.amount);}
+      if(a.action.includes('calls')){action='Call';amount=a.amount;}
+      else if(a.action.includes('raises')){action=a.allin?'Raise ALL-IN':'Raise';amount=a.amount;}
+      else if(a.action.includes('bets')){action=a.allin?'Bet ALL-IN':'Bet';amount=a.amount;}
       else if(a.action.includes('folds')){action='Fold';}
       else if(a.action.includes('checks')){action='Check';}
       else if(a.action==='wins'){
-        action='Vince'; amount=fmt(a.amount);
+        action='Vince'; amount=a.amount;
         const winnerIdx = seats.findIndex(s=>s.name===a.player);
         // Step 1: pot visible, winner chip shows amount won
         snap(a.player, action, amount, ph, {winnerIdx});
@@ -1606,7 +1607,8 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
     ctx.font=`700 ${fsStack}px 'Segoe UI',sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle=col;
-    ctx.fillText(amt?`${act}  ${amt}`:act, textCX, stackY);
+    const amtStr = (amt!==''&&amt!==undefined&&amt!==null) ? fmtStack(+amt) : '';
+    ctx.fillText(amtStr?`${act}  ${amtStr}`:act, textCX, stackY);
   } else {
     ctx.font=`${fsStack}px 'Courier New',monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
