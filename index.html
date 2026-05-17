@@ -1278,7 +1278,7 @@ function drawAllInBadges(ctx, seats, pos, W, H){
     // Pill "ALL IN" centrata sul bordo superiore del nameplate
     const bw = Math.max(38, W * .052);
     const bh = Math.max(13, W * .018);
-    const bx = x - bw/2;
+    const bx = plateLeft + pw - bw;
     const by = plateTop + ph - bh/2;
 
     ctx.save();
@@ -1290,9 +1290,9 @@ function drawAllInBadges(ctx, seats, pos, W, H){
     ctx.font = `900 ${tfs}px 'Segoe UI',Arial,sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(0,0,0,.4)';
-    ctx.fillText('ALL IN', x + .5, by + bh/2 + .5);
+    ctx.fillText('ALL IN', bx + bw/2 + .5, by + bh/2 + .5);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('ALL IN', x, by + bh/2);
+    ctx.fillText('ALL IN', bx + bw/2, by + bh/2);
     ctx.restore();
   });
 }
