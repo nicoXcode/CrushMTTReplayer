@@ -1260,62 +1260,42 @@ function drawBetChip(ctx,s,pos,W,H){
 function drawAllInBadges(ctx, seats, pos, W, H){
   seats.forEach((s, i) => {
     if(!s.allin || s.folded) return;
-    const{x,y}=pos[i], dx=W/2-x, dy=H/2-y;
-    const tFinal=0.30;
-    const bx=x+dx*tFinal, by=y+dy*tFinal;
+    const{x, y} = pos[i];
+    const{pw, ph, blockH, ch, ov} = seatBlockMetrics(W, H);
+    const plateTop = y + blockH/2 - ph;
+    const plateLeft = x - pw/2;
 
-    // Measure pill width to position badge beside it
-    const fs=Math.max(8,W*.011);
-    ctx.font=`700 ${fs}px 'Segoe UI',Arial,sans-serif`;
-    const labelVal=fmtStack(s.bet||0);
-    const tw=ctx.measureText(labelVal).width;
-    const pillH=fs*1.4;
-    const r=Math.max(6,W*.0085);
-    const gap=r*0.6;
-    const rowW=tw+10+gap+r*2;
+    // Bordo rosso acceso attorno al nameplate
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,32,32,.6)';
+    ctx.shadowBlur = 10;
+    roundRect(ctx, plateLeft - 2, plateTop - 2, pw + 4, ph + 4, 9);
+    ctx.strokeStyle = '#ff2020';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
 
-    // Badge sits toward center from the pill (opposite side from player)
-    const bw=Math.max(38,W*.052);
-    const bh=bw*0.52;
-
-    // Direction from center toward player (away from center)
-    const len=Math.sqrt(dx*dx+dy*dy)||1;
-    const nx=-dx/len, ny=-dy/len; // unit vector toward player (away from center)
-
-    // Place badge between chip and player's nameplate
-    const badgeCX = bx + nx*(rowW/2 + bw/2 + 6);
-    const badgeCY = by;
+    // Pill "ALL IN" centrata sul bordo superiore del nameplate
+    const bw = Math.max(38, W * .052);
+    const bh = Math.max(13, W * .018);
+    const bx = x - bw/2;
+    const by = plateTop - bh/2;
 
     ctx.save();
-    // shadow
-    ctx.beginPath();
-    ctx.moveTo(badgeCX, badgeCY - bh/2 + 2);
-    ctx.lineTo(badgeCX - bw/2 + 2, badgeCY + bh/2 + 2);
-    ctx.lineTo(badgeCX + bw/2 + 2, badgeCY + bh/2 + 2);
-    ctx.closePath();
-    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fill();
+    roundRect(ctx, bx, by, bw, bh, bh/2);
+    ctx.fillStyle = '#ff2020'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,100,.4)'; ctx.lineWidth = .5; ctx.stroke();
 
-    // red triangle
-    ctx.beginPath();
-    ctx.moveTo(badgeCX, badgeCY - bh/2);
-    ctx.lineTo(badgeCX - bw/2, badgeCY + bh/2);
-    ctx.lineTo(badgeCX + bw/2, badgeCY + bh/2);
-    ctx.closePath();
-    ctx.fillStyle='#ff2020'; ctx.fill();
-    ctx.strokeStyle='#d4a017'; ctx.lineWidth=Math.max(1,bw*.028); ctx.stroke();
-
-    // text
-    const tfs=Math.max(6,bw*.17);
-    ctx.font=`900 ${tfs}px 'Segoe UI',Arial,sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,0,0,.5)';
-    ctx.fillText('ALL IN', badgeCX+.5, badgeCY+bh*.10+.5);
-    ctx.fillStyle='#ffffff';
-    ctx.fillText('ALL IN', badgeCX, badgeCY+bh*.10);
+    const tfs = Math.max(7, bw * .20);
+    ctx.font = `900 ${tfs}px 'Segoe UI',Arial,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.fillText('ALL IN', x + .5, by + bh/2 + .5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('ALL IN', x, by + bh/2);
     ctx.restore();
   });
 }
-// The chip is viewed from ~30° above: face is a full circle, edge is an elliptical band below
 function chip3d(ctx, cx, cy, r, th, color, label){
   ctx.save();
 
