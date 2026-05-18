@@ -736,10 +736,12 @@ function selectHand(idx){
   const sl=document.getElementById('step-slider');
   sl.max=steps.length-1; sl.value=0;
   const h=gs.header;
+  const modeTag = h.mode && h.mode!=='Normal' ? ` <span style="background:#c49010;color:#0a0c10;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:900;">${h.mode}</span>` : '';
   document.getElementById('hand-meta').innerHTML=
-    `<strong>Mano #${h.handId}</strong> &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`+
-    (h.ante?` &nbsp;·&nbsp; Ante ${fmt(h.ante)}`:'')+
-    (h.tournament?` &nbsp;·&nbsp; Torneo #${h.tournament}`:'');
+    `<strong>${h.room||'PS'}</strong>${modeTag} &nbsp;·&nbsp; ${h.buyIn||''}` +
+    (h.tournament?` &nbsp;·&nbsp; #${h.tournament}`:'')+
+    ` &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`+
+    (h.ante?` &nbsp;·&nbsp; Ante ${fmt(h.ante)}`:'');
   // update sidebar highlight
   document.querySelectorAll('.hand-item').forEach((el,i)=>{ el.className='hand-item'+(i===idx?' active':''); });
   document.querySelectorAll('.hand-num').forEach((el,i)=>{ el.className='hand-num'+(i===idx?' active':''); });
@@ -757,6 +759,19 @@ function parseHand(text){
   const m=lines[0].match(/(?:PokerStars|Sisal) Hand #(\d+).*Level\s+([IVXLCDM]+)\s+\((\d+)\/(\d+)\)/);
   if(m) s.header={handId:m[1],level:m[2],sb:+m[3],bb:+m[4]};
   const tm=lines[0].match(/Tournament #(\d+)/); if(tm) s.header.tournament=tm[1];
+  // Buy-in: €90+€10 or $50+$5 or 90+10 (no currency)
+  const bim=lines[0].match(/([€$£]?[\d,.]+)[+][€$£]?[\d,.]+(?:[+][€$£]?[\d,.]+)?\s+(?:EUR|USD|GBP|[A-Z]{3})?/);
+  if(bim) s.header.buyIn=bim[0].trim();
+  // Mode: look for keywords in parens after game type
+  const modeLine = lines[0];
+  if(/Progressive KO|Progressive Knockout|PKO/i.test(modeLine)) s.header.mode='PKO';
+  else if(/Mystery Bounty|Mystery KO/i.test(modeLine)) s.header.mode='Mystery Bounty';
+  else if(/Bounty|Knockout|KO/i.test(modeLine)) s.header.mode='Bounty';
+  else if(/Rebuy/i.test(modeLine)) s.header.mode='Rebuy';
+  else if(/Turbo/i.test(modeLine)) s.header.mode='Turbo';
+  else s.header.mode='Normal';
+  // Room: PokerStars or Sisal
+  s.header.room = lines[0].startsWith('Sisal') ? 'Sisal' : 'PokerStars';
   const bm=(lines[1]||'').match(/Seat #(\d+) is the button/)||text.match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
   for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
