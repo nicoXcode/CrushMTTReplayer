@@ -179,6 +179,35 @@ body {
 @media (min-width:1400px){
   :root { --sidebar:250px; }
 }
+@media (max-width: 768px) {
+  #replayer.visible { flex-direction: column; gap: 0; }
+  #sidebar { display: none; }
+  #main-area { height: 100vh; flex-direction: column; }
+  #top-bar {
+    height: 42px; padding: 0 10px; gap: 6px;
+    border-radius: 0; border-left: none; border-right: none; border-top: none;
+  }
+  #hand-meta { font-size: 9px; }
+  #bb-toggle-wrap { display: none; }
+  #canvas-wrap {
+    flex: 1; min-height: 0;
+    border-left: none; border-right: none;
+  }
+  #bottom-panel {
+    height: 72px; padding: 0 16px; gap: 0;
+    border-radius: 0; border-left: none; border-right: none; border-bottom: none;
+    justify-content: space-between;
+  }
+  #phases { display: none; }
+  #action-wrap { display: none; }
+  #controls { display: none; }
+  #kb-hint { display: none; }
+  #progress-wrap { display: none; }
+  #mobile-nav { display: flex; width: 100%; gap: 12px; }
+}
+@media (min-width: 769px) {
+  #mobile-nav { display: none; }
+}
 </style>
 </head>
 <body>
@@ -265,6 +294,10 @@ body {
           <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx+1)" title="Mano successiva">▼ Succ</button>
         </div>
         <div id="kb-hint">← → naviga · ↑ ↓ cambia mano</div>
+      <div id="mobile-nav">
+  <button onclick="step(-1)" style="flex:1;height:48px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:24px;cursor:pointer;">◀</button>
+  <button onclick="step(1)"  style="flex:1;height:48px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:24px;cursor:pointer;">▶</button>
+</div>
       </div>
     </div>
   </div>
@@ -1813,6 +1846,17 @@ document.getElementById('tc').addEventListener('mouseleave', function() {
   }
 });
 
+(function initTouch(){
+  const canvas = document.getElementById('tc');
+  let startX = 0;
+  canvas.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+  }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    if(Math.abs(dx) > 40) dx < 0 ? step(1) : step(-1);
+  }, { passive: true });
+})();
 (function loadSharedHand(){
   const params = new URLSearchParams(window.location.search);
   const shortId = params.get('h');
