@@ -112,10 +112,9 @@ body {
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   overflow:hidden;
 }
-#hand-meta { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#hand-meta { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:6px; }
 #hand-meta strong { color:var(--text); font-weight:600; }
-#bb-toggle-wrap { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-#bb-toggle-wrap label { font-size:11px; color:var(--text2); }
+#bb-toggle-wrap { display:flex; align-items:center; flex-shrink:0; }
 .toggle-group { display:flex; border:1px solid var(--border2); border-radius:6px; overflow:hidden; }
 .toggle-btn { padding:3px 9px; font-size:11px; font-weight:700; background:transparent; border:none; color:var(--text3); cursor:pointer; transition:all .15s; }
 .toggle-btn.active { background:var(--gold); color:#0a0c10; }
@@ -256,12 +255,13 @@ body {
     <!-- MAIN -->
     <div id="main-area">
       <div id="top-bar">
-        <div id="hand-meta">—</div>
-        <div id="bb-toggle-wrap">
-          <label>Stack:</label>
-          <div class="toggle-group">
-            <button class="toggle-btn" id="btn-chips" onclick="setStackMode('chips')">Chips</button>
-            <button class="toggle-btn active" id="btn-bb" onclick="setStackMode('bb')">BB</button>
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;overflow:hidden;">
+          <div id="hand-meta">—</div>
+          <div id="bb-toggle-wrap">
+            <div class="toggle-group">
+              <button class="toggle-btn" id="btn-chips" onclick="setStackMode('chips')">Chips</button>
+              <button class="toggle-btn active" id="btn-bb" onclick="setStackMode('bb')">BB</button>
+            </div>
           </div>
         </div>
         <button onclick="openGuide()" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#c49010,#f0c030);color:#0a0c10;border:none;font-size:16px;font-weight:900;cursor:pointer;font-family:Georgia,serif;line-height:1;">?</button>
@@ -781,9 +781,19 @@ function selectHand(idx){
   const sl=document.getElementById('step-slider');
   sl.max=steps.length-1; sl.value=0;
   const h=gs.header;
-  const modeTag = h.mode && h.mode!=='Normal' ? ` <span style="background:#c49010;color:#0a0c10;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:900;">${h.mode}</span>` : '';
+  const roomColors = {
+    'PokerStars': '#b91c1c',
+    'Sisal':      '#15803d',
+    '888':        '#0369a1',
+    'iPoker':     '#92400e',
+  };
+  const roomName = h.room || 'PokerStars';
+  const roomBg   = roomColors[roomName] || '#555';
+  const buyInPart = h.buyIn ? ` &nbsp;${h.buyIn}` : '';
+  const roomBadge = `<span style="background:${roomBg};color:#fff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.2px;flex-shrink:0;">${roomName}${buyInPart}</span>`;
+  const modeTag = h.mode && h.mode!=='Normal' ? ` <span style="background:#c49010;color:#0a0c10;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;">${h.mode}</span>` : '';
   document.getElementById('hand-meta').innerHTML=
-    `<strong>${h.room||'PS'}</strong>${modeTag} &nbsp;·&nbsp; ${h.buyIn||''}` +
+    roomBadge + modeTag +
     (h.tournament?` &nbsp;·&nbsp; #${h.tournament}`:'')+
     ` &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`+
     (h.ante?` &nbsp;·&nbsp; Ante ${fmt(h.ante)}`:'');
