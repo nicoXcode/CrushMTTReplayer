@@ -263,6 +263,7 @@ body {
               <button class="toggle-btn active" id="btn-bb" onclick="setStackMode('bb')">BB</button>
             </div>
           </div>
+          <button id="btn-anon" onclick="toggleAnon()" style="padding:3px 9px;font-size:11px;font-weight:700;background:transparent;border:1px solid #323b52;border-radius:6px;color:#8a96a8;cursor:pointer;transition:all .15s;flex-shrink:0;">Hide Player Name</button>
         </div>
         <button onclick="openGuide()" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#c49010,#f0c030);color:#0a0c10;border:none;font-size:16px;font-weight:900;cursor:pointer;font-family:Georgia,serif;line-height:1;">?</button>
       </div>
@@ -385,6 +386,7 @@ let steps=[];         // steps for current hand
 let timer=null;
 let stackMode='bb';
 window.HERO_HOVER_SEAT = null;
+let anonMode = false;
 
 // ── MULTI-HAND SPLITTER ─────────────────────────────────────────
 function splitHands(text){
@@ -645,7 +647,9 @@ async function shareHandByIdx(idx, btn){
   if(!handText){ alert('Testo originale non disponibile.'); return; }
   btn.textContent = '…';
   try {
-    const id = await saveHandToSupabase(handText);
+    const hand = allHands[idx];
+    const textToSave = (anonMode && hand) ? anonymizeHandText(handText, hand.seats) : handText;
+    const id = await saveHandToSupabase(textToSave);
     const url = window.location.origin + window.location.pathname + '?h=' + id;
     if(navigator.clipboard){
       await navigator.clipboard.writeText(url);
@@ -671,7 +675,8 @@ async function shareHand(){
   const btn = document.getElementById('share-btn');
   btn.textContent = '⏳ ...';
   try {
-    const id = await saveHandToSupabase(handText);
+    const textToSave = (anonMode && gs) ? anonymizeHandText(handText, gs.seats) : handText;
+    const id = await saveHandToSupabase(textToSave);
     const url = window.location.origin + window.location.pathname + '?h=' + id;
     if(navigator.clipboard){
       await navigator.clipboard.writeText(url);
@@ -693,6 +698,39 @@ function backToInput(){
 }
 
 function openModal(){ document.getElementById('modal-overlay').className='visible'; document.getElementById('modal-input').value=''; }
+
+function anonymizeHandText(handText, seats){
+  // Build name → alias map from seats
+  const map = {};
+  const nonHeroes = seats.filter(s => !s.isHero);
+  seats.forEach(s => {
+    if(s.isHero) map[s.name] = 'Hero';
+    else {
+      const i = nonHeroes.findIndex(x => x.name === s.name);
+      map[s.name] = 'Player' + (i + 1);
+    }
+  });
+  // Sort by length descending to avoid partial replacements
+  const names = Object.keys(map).sort((a,b) => b.length - a.length);
+  let text = handText;
+  for(const name of names){
+    // Escape regex special chars in name
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(escaped, 'g'), map[name]);
+  }
+  return text;
+}
+
+function toggleAnon(){
+  anonMode = !anonMode;
+  const btn = document.getElementById('btn-anon');
+  if(btn){
+    btn.style.background  = anonMode ? 'var(--gold)' : 'transparent';
+    btn.style.color       = anonMode ? '#0a0c10'     : '#8a96a8';
+    btn.style.borderColor = anonMode ? 'var(--gold)'  : '#323b52';
+  }
+  if(steps.length) renderCanvas(steps[cur]);
+}
 function closeModal(){ document.getElementById('modal-overlay').className=''; }
 function openGuide(){ document.getElementById('guide-overlay').style.display='flex'; }
 function closeGuide(){ document.getElementById('guide-overlay').style.display='none'; }
@@ -1095,7 +1133,8 @@ function goToStep(n){
   const st=steps[cur];
   const order=['preflop','flop','turn','river'],ci=order.indexOf(st.phase);
   order.forEach((ph,i)=>{ document.getElementById('ph-'+ph).className='pill'+(i===ci?' active':i<ci?' done':''); });
-  const disp=st.activePlayer==='—'?st.action:`${st.activePlayer} → ${st.action}`;
+  const dispPlayer = (anonMode && gs && st.activePlayer!=='—') ? anonName(st.activePlayer, gs.seats) : st.activePlayer;
+  const disp=dispPlayer==='—'?st.action:`${dispPlayer} → ${st.action}`;
   document.getElementById('action-player').textContent=disp;
   document.getElementById('action-detail').textContent=st.amount||'';
   renderCanvas(st);
@@ -1176,6 +1215,9 @@ function renderCanvas(st){
   st.seats.forEach((s,i)=>drawSeat(ctx,s,pos[i],W,H,st.seatActions[s.name]||null,st.shown[s.name]));
   st.seats.forEach((s,i)=>drawBetChip(ctx,s,pos[i],W,H));
   drawAllInBadges(ctx,st.seats,pos,W,H); // always on top
+  // Pot odds per hero
+  const heroIdx = st.seats.findIndex(s => s.isHero);
+  drawPotOdds(ctx, W, H, st, heroIdx >= 0 ? pos[heroIdx] : null);
 }
 
 function drawTable(ctx, W, H) {
@@ -1618,6 +1660,45 @@ function drawPot(ctx, W, H, pot){
   ctx.fillText(potLabel, cx, cy);
   ctx.restore();
 }
+function drawPotOdds(ctx, W, H, st, heroPos) {
+  if(!heroPos) return;
+  if(!['flop','turn','river'].includes(st.phase)) return;
+
+  const heroSeat = st.seats.find(s => s.isHero);
+  if(!heroSeat || heroSeat.folded) return;
+
+  const maxBet = Math.max(...st.seats.filter(s => !s.isHero).map(s => s.bet || 0));
+  const heroBet = heroSeat.bet || 0;
+  const callAmount = maxBet - heroBet;
+
+  if(callAmount <= 0) return;
+
+  const potAfterCall = st.pot + callAmount;
+  const potOdds = (callAmount / potAfterCall * 100);
+
+  const label = `Pot Odds: ${potOdds.toFixed(1)}%`;
+
+  const { pw, ph, blockH, ch, ov } = seatBlockMetrics(W, H);
+  const { x, y } = heroPos;
+  const plateBottom = y + blockH/2 + 6;
+
+  const fs = Math.max(11, W * .013);
+  ctx.save();
+  ctx.font = `700 ${fs}px 'Segoe UI',Arial,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width;
+  const pillW = tw + 14, pillH = fs * 1.5;
+  const px = x - pillW/2, py = plateBottom;
+
+  roundRect(ctx, px, py, pillW, pillH, pillH/2);
+  ctx.fillStyle = 'rgba(0,0,0,.82)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(212,160,23,.5)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#f0c030';
+  ctx.fillText(label, x, py + pillH/2);
+  ctx.restore();
+}
+
 function drawBoard(ctx,W,H,board){
   if(!board||!board.length)return;
   const cw=Math.max(40,W*.062),ch=cw*1.37,gap=5,total=5*(cw+gap)-gap;
@@ -1705,7 +1786,8 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   ctx.font=`700 ${fsName}px 'Segoe UI',sans-serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle = s.folded?'#3a3a48' : isActive?'#fff' : '#b0c4de';
-  ctx.fillText(s.name.length>16?s.name.slice(0,16)+'…':s.name, textCX, nameY);
+  const displayName = anonMode && gs ? anonName(s.name, gs.seats) : s.name;
+  ctx.fillText(displayName.length>16?displayName.slice(0,16)+'…':displayName, textCX, nameY);
 
   // Stack / action
   if(isActive && seatAction.action){
@@ -1890,6 +1972,17 @@ function drawFoldedCard(ctx,x,y,w,h){
 }
 
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();}
+function anonName(name, seats){
+  if(!anonMode) return name;
+  const s = seats.find(x => x.name === name);
+  if(!s) return name;
+  if(s.isHero) return 'Hero';
+  // Count non-hero seats in order, assign Player1, Player2...
+  const nonHeroes = seats.filter(x => !x.isHero);
+  const idx = nonHeroes.findIndex(x => x.name === name);
+  return idx >= 0 ? 'Player' + (idx + 1) : name;
+}
+
 function fmt(n){if(!n&&n!==0)return '0';if(n>=1000000)return (n/1000000).toFixed(1)+'M';if(n>=1000)return (n/1000).toFixed(1)+'k';return String(n);}
 
 // keyboard nav and resize handled above
@@ -1923,6 +2016,7 @@ document.getElementById('tc').addEventListener('mousemove', function(e) {
 document.getElementById('tc').addEventListener('mouseleave', function() {
   if(window.HERO_HOVER_SEAT !== null) {
     window.HERO_HOVER_SEAT = null;
+let anonMode = false;
     renderCanvas(steps[cur]);
   }
 });
