@@ -430,12 +430,36 @@ function parseIPokerHand(text){
   // Header: "GAME #6692898868 ... Blinds: 15/30"
   const hm=lines[0].match(/GAME #(\d+)/);
   if(hm) s.header.handId=hm[1];
-  const blm=lines[0].match(/Blinds:\s*([\d,]+)\/([\d,]+)/);
-  if(blm){ s.header.sb=parseFloat(blm[1].replace(',','')); s.header.bb=parseFloat(blm[2].replace(',','')); }
+  // Blinds: try GAME # line first, then Table Info line
+  const blmSrc = lines.find(l => /Blinds:/i.test(l)) || '';
+  const blm = blmSrc.match(/Blinds:\s*([\d,]+)\/([\d,]+)/i);
+  if(blm){ s.header.sb=parseFloat(blm[1].replace(/,/g,'')); s.header.bb=parseFloat(blm[2].replace(/,/g,'')); }
+  // Ante from Table Info
+  const anteLine = lines.find(l => /Ante:/i.test(l)) || '';
+  const anteM = anteLine.match(/Ante:\s*([\d,]+)/i);
+  if(anteM) s.header.ante = parseFloat(anteM[1].replace(/,/g,''));
   s.header.level='1'; // iPoker doesn't always show level
 
   // Tournament
   const tm=lines[0].match(/Tournament/); if(tm) s.header.tournament=s.header.handId;
+  s.header.room = 'iPoker';
+  // Mode from Table line
+  const tableLine = lines.find(l => l.startsWith('Table ')) || '';
+  if(/Mystery KO|Mystery Bounty/i.test(tableLine)) s.header.mode='Mystery Bounty';
+  else if(/Progressive KO|PKO/i.test(tableLine)) s.header.mode='PKO';
+  else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='Bounty';
+  else if(/Rebuy/i.test(tableLine)) s.header.mode='Rebuy';
+  else s.header.mode='Normal';
+  // Buy-in from Table line: Buy-In: €4.40 + €4.40 + €1.20
+  (()=>{
+    const bim = tableLine.match(/Buy-In:\s*([€$£]?)([\d.,]+(?:\s*[+]\s*[€$£]?[\d.,]+)+)/i);
+    if(!bim) return;
+    const sym = bim[1] || '€';
+    const parts = bim[2].split('+').map(p => parseFloat(p.replace(/[€$£,\s]/g,'').replace(',','.')));
+    const total = parts.reduce((a,b)=>a+b,0);
+    const totalStr = (total % 1 === 0) ? total.toFixed(0) : (total % 0.1 < 0.01 ? total.toFixed(1) : total.toFixed(2));
+    s.header.buyIn = sym + totalStr;
+  })();
 
   // Seats: "Seat 5: pokerrosso (€3,012.00 in chips)  DEALER"
   let btnSeat=-1;
@@ -459,7 +483,7 @@ function parseIPokerHand(text){
     if(inSummary){
       s.summaryLines.push(l);
       // "PlayerName: Shows [SA S6] ..."
-      const shm=l.match(/^(\S+):\s+Shows\s+\[(.+?)\]/i);
+      const shm=l.match(/^(\S+):\s+(?:Shows|Mucks)\s+\[(.+?)\]/i);
       if(shm) s.showdown[shm[1]]=convertIPokerCards(shm[2]);
       // "PlayerName: wins €775.00"
       const wm=l.match(/^(\S+):\s+wins\s+€([\d,.]+)/i);
@@ -521,7 +545,7 @@ function parseIPokerHand(text){
     if(wm2 && !inSummary && s.actions[phase]) s.actions[phase].push({player:wm2[1],action:'wins',amount:parseFloat(wm2[2].replace(/,/g,''))});
   }
 
-  s.header.ante=0;
+  if(!s.header.ante) s.header.ante=0;
   return s;
 }
 
