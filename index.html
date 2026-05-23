@@ -484,7 +484,7 @@ function parseIPokerHand(text){
   // Seats: "Seat 5: pokerrosso (€3,012.00 in chips)  DEALER"
   let btnSeat=-1;
   for(const l of lines){
-    const sm=l.match(/^Seat (\d+):\s+(\S+)\s+\(€([\d,.]+)\s+in chips\)(.*)/);
+    const sm=l.match(/^Seat (\d+):\s+([^(]+?)\s*\(€([\d,.]+)\s+in chips\)(.*)/);
     if(sm){
       const chips=parseFloat(sm[3].replace(/,/g,''));
       s.seats.push({seat:+sm[1],name:sm[2],chips,stack:chips,bet:0,folded:false,allin:false,isHero:false,pos:''});
@@ -531,33 +531,33 @@ function parseIPokerHand(text){
     }
 
     // "Dealt to xN1CO [S4 H6]"
-    const dm=l.match(/^Dealt to (\S+)\s+\[(.+)\]/);
+    const dm=l.match(/^Dealt to ([^[]+?)\s*\[(.+)\]/);
     if(dm){ s.holeCards[dm[1]]=convertIPokerCards(dm[2]); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
 
     // Blinds: "ChiappoGirl: Post SB €15.00"
-    const sbm=l.match(/^(\S+):\s+Post SB\s+€([\d,.]+)/i);
+    const sbm=l.match(/^([^:]+):\s+Post SB\s+€([\d,.]+)/i); if(sbm) sbm[1]=sbm[1].trim();
     if(sbm){ s.smallBlind={player:sbm[1],amount:parseFloat(sbm[2].replace(/,/g,''))}; continue; }
-    const bbm=l.match(/^(\S+):\s+Post BB\s+€([\d,.]+)/i);
+    const bbm=l.match(/^([^:]+):\s+Post BB\s+€([\d,.]+)/i); if(bbm) bbm[1]=bbm[1].trim();
     if(bbm){ s.bigBlind={player:bbm[1],amount:parseFloat(bbm[2].replace(/,/g,''))}; continue; }
 
     // Actions (preflop only after HOLE CARDS)
     if(phase!=='pre'){
       // Fold
-      if(l.match(/^(\S+):\s+Fold\s*$/i)){ const pm=l.match(/^(\S+)/); if(pm) s.actions[phase].push({player:pm[1],action:'folds',amount:0,allin:false}); continue; }
+      const foldm=l.match(/^([^:]+):\s+Fold\s*$/i); if(foldm){ s.actions[phase].push({player:foldm[1].trim(),action:'folds',amount:0,allin:false}); continue; }
       // Check
-      if(l.match(/^(\S+):\s+Check\s*$/i)){ const pm=l.match(/^(\S+)/); if(pm) s.actions[phase].push({player:pm[1],action:'checks',amount:0,allin:false}); continue; }
+      const checkm=l.match(/^([^:]+):\s+Check\s*$/i); if(checkm){ s.actions[phase].push({player:checkm[1].trim(),action:'checks',amount:0,allin:false}); continue; }
       // Call €30.00
-      const callm=l.match(/^(\S+):\s+Call\s+€([\d,.]+)/i);
-      if(callm){ s.actions[phase].push({player:callm[1],action:'calls',amount:parseFloat(callm[2].replace(/,/g,'')),allin:false}); continue; }
+      const callm=l.match(/^([^:]+):\s+Call\s+€([\d,.]+)/i);
+      if(callm){ s.actions[phase].push({player:callm[1].trim(),action:'calls',amount:parseFloat(callm[2].replace(/,/g,'')),allin:false}); continue; }
       // Bet €94.00
-      const betm=l.match(/^(\S+):\s+Bet\s+€([\d,.]+)/i);
-      if(betm){ s.actions[phase].push({player:betm[1],action:'bets',amount:parseFloat(betm[2].replace(/,/g,'')),allin:false}); continue; }
+      const betm=l.match(/^([^:]+):\s+Bet\s+€([\d,.]+)/i);
+      if(betm){ s.actions[phase].push({player:betm[1].trim(),action:'bets',amount:parseFloat(betm[2].replace(/,/g,'')),allin:false}); continue; }
       // Raise (NF) €60.00 — amount is total raise to
-      const raisem=l.match(/^(\S+):\s+Raise(?:\s*\([^)]*\))?\s+€([\d,.]+)/i);
-      if(raisem){ s.actions[phase].push({player:raisem[1],action:'raises',amount:parseFloat(raisem[2].replace(/,/g,'')),allin:false}); continue; }
+      const raisem=l.match(/^([^:]+):\s+Raise(?:\s*\([^)]*\))?\s+€([\d,.]+)/i);
+      if(raisem){ s.actions[phase].push({player:raisem[1].trim(),action:'raises',amount:parseFloat(raisem[2].replace(/,/g,'')),allin:false}); continue; }
       // All-in variants
-      const allm=l.match(/^(\S+):\s+(?:All-In|Allin)\s+€([\d,.]+)/i);
-      if(allm){ s.actions[phase].push({player:allm[1],action:'raises all-in',amount:parseFloat(allm[2].replace(/,/g,'')),allin:true}); continue; }
+      const allm=l.match(/^([^:]+):\s+(?:All-In|Allin)\s+€([\d,.]+)/i);
+      if(allm){ s.actions[phase].push({player:allm[1].trim(),action:'raises all-in',amount:parseFloat(allm[2].replace(/,/g,'')),allin:true}); continue; }
     }
 
     // wins in non-summary (some formats)
@@ -1758,7 +1758,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
     shown.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,false);ctx.restore(); });
     ctx.restore();
   } else if(s.folded){
-    [-1,1].forEach(dir=>{ctx.save();ctx.translate(x+dir*cw*.48,cardCenterY);ctx.rotate(dir*fanA*.55);drawFoldedCard(ctx,0,0,cw,ch);ctx.restore();});
+    // carte non mostrate dopo fold
   } else if(shown && s.isHero){
     shown.forEach((c,i)=>{ const dir=i===0?-1:1; ctx.save();ctx.translate(x+dir*cw*.50,cardCenterY);ctx.rotate(dir*.06*fanA);drawCard(ctx,0,0,c,cw,ch,isActive&&s.isHero);ctx.restore(); });
   } else if(shown && !s.isHero){
