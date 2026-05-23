@@ -1793,12 +1793,13 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   if(s.pos){
     const pc = POS_COLOR[s.pos]||'#888';
     ctx.save();
+    const posCol = POS_COLOR[s.pos]||'#888';
     roundRect(ctx, posX, plateTop+4, posW, ph-8, 4);
-    ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle=posCol+'22'; ctx.fill();
+    ctx.strokeStyle=posCol; ctx.lineWidth=1; ctx.stroke();
     ctx.font=`700 ${Math.max(7,W*.009)}px 'Inter',sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle='#ffffff';
+    ctx.fillStyle=posCol;
     ctx.fillText(s.pos, posX+posW/2, plateTop+ph/2);
     ctx.restore();
   }
