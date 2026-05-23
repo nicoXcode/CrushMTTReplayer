@@ -463,8 +463,8 @@ function parseIPokerHand(text){
   // Tournament
   const tm=lines[0].match(/Tournament/); if(tm) s.header.tournament=s.header.handId;
   s.header.room = 'iPoker';
-  // Mode from Table line
-  const tableLine = lines.find(l => l.startsWith('Table ')) || '';
+  // Mode from Tournament table line (not "Table Info:")
+  const tableLine = lines.find(l => l.startsWith('Table ') && !l.startsWith('Table Info')) || '';
   if(/Mystery KO|Mystery Bounty/i.test(tableLine)) s.header.mode='Mystery Bounty';
   else if(/Progressive KO|PKO/i.test(tableLine)) s.header.mode='PKO';
   else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='Bounty';
@@ -867,7 +867,7 @@ function selectHand(idx){
     'PokerStars': '#b91c1c',
     'Sisal':      '#15803d',
     '888':        '#0369a1',
-    'iPoker':     '#92400e',
+    'iPoker':     '#15803d',
   };
   const roomName = h.room || 'PokerStars';
   const roomBg   = roomColors[roomName] || '#555';
@@ -1635,44 +1635,85 @@ function chipColors(bet, bb){
 
 function drawDealerButton(ctx, seats, pos, W, H) {
   const btnIdx = seats.findIndex(s => s.pos === 'BTN');
-  if (btnIdx < 0) return;
+  if(btnIdx < 0) return;
   const { x, y } = pos[btnIdx];
-  const r = Math.max(9, W * .013);
-  const tRX = W * .36, tRY = H * .26;
-  // Angolo del seat BTN rispetto al centro del tavolo
-  const btnAngle = Math.atan2(y - H/2, x - W/2);
-  // Sposta il D di 50 gradi in senso orario lungo il bordo del tavolo
-  const shift = Math.PI * 50 / 180;
-  const dAngle = btnAngle + shift;
-  // Punto sul bordo interno dell'ellisse nella direzione shiftata
-  const cosA = Math.cos(dAngle), sinA = Math.sin(dAngle);
-  const ellipseDist = (tRX * tRY) / Math.sqrt(tRY*tRY*cosA*cosA + tRX*tRX*sinA*sinA);
-  // Inset per tenere D ben dentro il tavolo
-  const inset = Math.max(r * 2.5, W * .04);
-  let bx = W/2 + cosA * (ellipseDist - inset);
-  let by = H/2 + sinA * (ellipseDist - inset);
-  // Clamp dentro il canvas
-  const pad = r * 3;
-  bx = Math.max(pad, Math.min(W - pad, bx));
-  by = Math.max(pad, Math.min(H - pad, by));
+  const r = Math.max(11, W * .016);
+  const th = r * .38;
+
+  const dx = x - W/2, dy = y - H/2;
+  const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+  const bx = x + dx/dist * (r * 2.2);
+  const by = y + dy/dist * (r * 2.2);
+
   ctx.save();
-  ctx.shadowColor = 'rgba(240,220,80,.5)'; ctx.shadowBlur = 8;
-  ctx.beginPath(); ctx.arc(bx, by, r + 1, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(240,220,80,.08)'; ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.beginPath(); ctx.arc(bx, by + 1.5, r, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
-  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#f8f4e8'; ctx.fill();
-  ctx.strokeStyle = '#c8a420'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath(); ctx.arc(bx, by, r * .72, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(180,140,20,.4)'; ctx.lineWidth = .5; ctx.stroke();
-  const fs = Math.max(8, r * 1.0);
-  ctx.font = `900 ${fs}px 'Segoe UI',Arial,sans-serif`;
+
+  // Drop shadow
+  ctx.beginPath(); ctx.ellipse(bx, by + th + r*.15, r*.85, r*.18, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fill();
+
+  // Cylinder side
+  const edgeGrd = ctx.createLinearGradient(bx-r, by+th, bx+r, by+th);
+  edgeGrd.addColorStop(0,   '#2a2a2a');
+  edgeGrd.addColorStop(0.5, '#888888');
+  edgeGrd.addColorStop(1,   '#1a1a1a');
+  ctx.beginPath(); ctx.ellipse(bx, by+th, r, r*.28, 0, 0, Math.PI*2);
+  ctx.fillStyle = edgeGrd; ctx.fill();
+  ctx.fillRect(bx-r, by, r*2, th);
+  ctx.beginPath(); ctx.ellipse(bx, by, r, r*.28, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#444'; ctx.fill();
+
+  // Face gradient (silver)
+  const faceGrd = ctx.createRadialGradient(bx-r*.3, by-r*.3, r*.05, bx, by, r);
+  faceGrd.addColorStop(0,    '#e8e8e8');
+  faceGrd.addColorStop(0.45, '#aaaaaa');
+  faceGrd.addColorStop(1,    '#555555');
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI*2);
+  ctx.fillStyle = faceGrd; ctx.fill();
+
+  // White border
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1.5, r*.06); ctx.stroke();
+
+  // Inner ring groove
+  ctx.beginPath(); ctx.arc(bx, by, r*.80, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(1, r*.05); ctx.stroke();
+
+  // Inner disc (black)
+  const innerGrd = ctx.createRadialGradient(bx-r*.25, by-r*.25, 0, bx, by, r*.72);
+  innerGrd.addColorStop(0,   '#2a2a2a');
+  innerGrd.addColorStop(0.6, '#1a1a1a');
+  innerGrd.addColorStop(1,   '#000000');
+  ctx.beginPath(); ctx.arc(bx, by, r*.72, 0, Math.PI*2);
+  ctx.fillStyle = innerGrd; ctx.fill();
+  ctx.beginPath(); ctx.arc(bx, by, r*.72, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = Math.max(.5, r*.03); ctx.stroke();
+
+  // D text
+  const fsD = Math.max(8, r*.72);
+  ctx.font = `900 ${fsD}px 'Georgia',serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#1a1208'; ctx.fillText('D', bx, by + .5);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.fillText('D', bx+.5, by+.5);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('D', bx, by - r*.08);
+
+  // DEALER label
+  const fsL = Math.max(5, r*.32);
+  ctx.font = `700 ${fsL}px Arial,sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.fillText('DEALER', bx, by + r*.45);
+
+  // Specular highlight
+  const hlGrd = ctx.createRadialGradient(bx-r*.32, by-r*.32, 0, bx, by, r);
+  hlGrd.addColorStop(0,   'rgba(255,255,255,.45)');
+  hlGrd.addColorStop(0.5, 'rgba(255,255,255,.08)');
+  hlGrd.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI*2);
+  ctx.fillStyle = hlGrd; ctx.fill();
+
   ctx.restore();
 }
+
 
 function drawPot(ctx, W, H, pot){
   if(!pot) return;
@@ -1745,6 +1786,7 @@ function drawBoard(ctx,W,H,board){
 function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   const{x,y}=pos;
   const isActive=seatAction!==null&&seatAction!==undefined;
+  const isBtn=s.pos==='BTN';
   const{pw,ph,cw,ch,ov,blockH}=seatBlockMetrics(W,H);
   const plateTop=y+blockH/2-ph;
   const plateLeft=x-pw/2;
@@ -1781,9 +1823,10 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   if(isActive)       ctx.fillStyle='rgba(40,40,40,.97)';
   else if(s.allin)   ctx.fillStyle='rgba(60,10,10,.97)';
   else if(s.folded)  ctx.fillStyle='rgba(12,12,12,.55)';
+  else if(isBtn&&!s.folded) ctx.fillStyle='rgba(60,45,0,.97)';
   else               ctx.fillStyle='rgba(26,26,26,.97)';
   ctx.fill();
-  ctx.strokeStyle=isActive?'rgba(255,255,255,.6)':s.allin?'rgba(200,30,30,.6)':'rgba(60,60,60,.9)';
+  ctx.strokeStyle=isActive?'rgba(255,255,255,.6)':s.allin?'rgba(200,30,30,.6)':isBtn?'rgba(212,160,23,.8)':'rgba(60,60,60,.9)';
   ctx.lineWidth=1; ctx.stroke();
   ctx.restore();
 
@@ -1795,11 +1838,18 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
     ctx.save();
     const posCol = POS_COLOR[s.pos]||'#888';
     roundRect(ctx, posX, plateTop+4, posW, ph-8, 4);
-    ctx.fillStyle=posCol+'22'; ctx.fill();
-    ctx.strokeStyle=posCol; ctx.lineWidth=1; ctx.stroke();
-    ctx.font=`700 ${Math.max(7,W*.009)}px 'Inter',sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle=posCol;
+    if(isBtn){ ctx.fillStyle='#d4a017'; ctx.fill();
+      ctx.strokeStyle='#f0c030'; ctx.lineWidth=1; ctx.stroke();
+      ctx.font=`700 ${Math.max(7,W*.009)}px 'Inter',sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle='#0a0c10';
+    } else {
+      ctx.fillStyle=posCol+'22'; ctx.fill();
+      ctx.strokeStyle=posCol; ctx.lineWidth=1; ctx.stroke();
+      ctx.font=`700 ${Math.max(7,W*.009)}px 'Inter',sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=posCol;
+    }
     ctx.fillText(s.pos, posX+posW/2, plateTop+ph/2);
     ctx.restore();
   }
