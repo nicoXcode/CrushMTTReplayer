@@ -332,50 +332,53 @@ body {
     </div>
   </div>
 
-<div id="guide-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:#12151e;border:1px solid #252b3a;border-radius:16px;padding:24px;width:min(580px,92vw);max-height:85vh;overflow-y:auto;">
+<div id="guide-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:24px;width:min(580px,92vw);max-height:85vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-      <span style="font-size:16px;font-weight:700;color:#f0c030;">♠ Come usare Crush MTT Replayer</span>
-      <button onclick="closeGuide()" style="background:transparent;border:none;color:#8a96a8;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+      <span style="font-size:15px;font-weight:700;color:#ffffff;">♠ Come usare Crush MTT Replayer</span>
+      <button onclick="closeGuide()" style="background:transparent;border:none;color:#666666;font-size:20px;cursor:pointer;line-height:1;transition:color .15s;" onmouseover="this.style.color='#ffffff'" onmouseout="this.style.color='#666666'">✕</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:18px;">
+
       <div>
-        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">CARICA UNA MANO</p>
-        <p style="font-size:13px;color:#8a96a8;margin:0 0 6px;line-height:1.6;">Incolla il testo della mano nel box iniziale e premi <b style="color:#d4a017">CARICA ▶</b> — oppure carica un file .txt. Puoi incollare più mani consecutive.</p>
-        <p style="font-size:13px;color:#8a96a8;margin:0;line-height:1.6;">Se hai ricevuto un link condiviso, aprilo nel browser — la mano si carica in automatico.</p>
+        <p style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;text-transform:uppercase;">Carica una mano</p>
+        <p style="font-size:13px;color:#666666;margin:0 0 6px;line-height:1.6;">Incolla il testo della mano nel box iniziale e premi <b style="color:#ffffff;">CARICA ▶</b> — oppure carica un file .txt. Puoi incollare più mani consecutive.</p>
+        <p style="font-size:13px;color:#666666;margin:0;line-height:1.6;">Se hai ricevuto un link condiviso, aprilo nel browser — la mano si carica in automatico.</p>
       </div>
+
       <div>
-        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">ROOM SUPPORTATE</p>
+        <p style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;text-transform:uppercase;">Room supportate</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div style="background:#1a1e2a;border-radius:8px;padding:8px 12px;font-size:12px;color:#e8ecf0;">PokerStars / Sisal</div>
-          <div style="background:#1a1e2a;border-radius:8px;padding:8px 12px;font-size:12px;color:#e8ecf0;">888</div>
-          <div style="background:#1a1e2a;border-radius:8px;padding:8px 12px;font-size:12px;color:#e8ecf0;">iPoker</div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:8px 12px;font-size:12px;color:#ffffff;">PokerStars / Sisal</div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:8px 12px;font-size:12px;color:#ffffff;">888</div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:8px 12px;font-size:12px;color:#ffffff;">iPoker</div>
         </div>
       </div>
+
       <div>
-        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">NAVIGARE LA MANO</p>
+        <p style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;text-transform:uppercase;">Navigare la mano</p>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#8a96a8;"><span style="background:#1a1e2a;border:1px solid #323b52;border-radius:5px;padding:2px 8px;font-family:monospace;color:#e8ecf0;font-size:12px;">← →</span> step precedente / successivo</div>
-          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#8a96a8;"><span style="background:#1a1e2a;border:1px solid #323b52;border-radius:5px;padding:2px 8px;font-family:monospace;color:#e8ecf0;font-size:12px;">↑ ↓</span> mano precedente / successiva</div>
-          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#8a96a8;"><span style="background:#1a1e2a;border:1px solid #323b52;border-radius:5px;padding:2px 8px;font-family:monospace;color:#e8ecf0;font-size:12px;">spazio</span> play / pausa automatico</div>
-          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#8a96a8;"><span style="background:#1a1e2a;border:1px solid #323b52;border-radius:5px;padding:2px 8px;font-family:monospace;color:#e8ecf0;font-size:12px;">swipe</span> naviga su mobile</div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#666666;"><span style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;font-family:monospace;color:#ffffff;font-size:12px;">← →</span> step precedente / successivo</div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#666666;"><span style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;font-family:monospace;color:#ffffff;font-size:12px;">↑ ↓</span> mano precedente / successiva</div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#666666;"><span style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;font-family:monospace;color:#ffffff;font-size:12px;">spazio</span> play / pausa automatico</div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#666666;"><span style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;font-family:monospace;color:#ffffff;font-size:12px;">swipe</span> naviga su mobile</div>
         </div>
       </div>
+
       <div>
-        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">FUNZIONI EXTRA</p>
-        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#8a96a8;line-height:1.6;">
+        <p style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;text-transform:uppercase;">Funzioni extra</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#666666;line-height:1.6;">
           <p style="margin:0;">↑ accanto a ogni mano nella sidebar per copiare il link di condivisione.</p>
           <p style="margin:0;">Se hero folda, le carte restano visibili in trasparenza — passa il mouse sopra per vederle a piena opacità.</p>
           <p style="margin:0;">Le carte degli avversari compaiono automaticamente all'ultimo step quando disponibili.</p>
-          <p style="margin:0;">Le mani con <span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid #4a90d9;vertical-align:middle;"></span> contorno blu nella sidebar sono quelle dove hero ha giocato.</p>
-          <p style="margin:0;">Usa il toggle <b style="color:#d4a017">Chips / BB</b> per visualizzare gli stack in big blind o in valore assoluto.</p>
+          <p style="margin:0;">Le mani con <span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid #4a4a4a;vertical-align:middle;"></span> contorno nella sidebar sono quelle dove hero ha giocato.</p>
+          <p style="margin:0;">Usa il toggle <b style="color:#ffffff;">Chips / BB</b> per visualizzare gli stack in big blind o in valore assoluto.</p>
         </div>
       </div>
+
     </div>
   </div>
-</div>
-
-</div>
+</div></div>
 <script>
 
 // ── CONSTANTS ──────────────────────────────────────────────────
