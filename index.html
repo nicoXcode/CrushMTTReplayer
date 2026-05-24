@@ -181,21 +181,21 @@ body {
 @media (max-width: 768px) {
   #replayer.visible { flex-direction: column; gap: 0; }
   #sidebar { display: none; }
-  #main-area { height: 100vh; flex-direction: column; }
+  #main-area { height: 100dvh; height: 100vh; flex-direction: column; overflow: hidden; }
   #top-bar {
-    height: 42px; padding: 0 10px; gap: 6px;
+    height: 42px; flex-shrink: 0; padding: 0 10px; gap: 6px;
     border-radius: 0; border-left: none; border-right: none; border-top: none;
   }
   #hand-meta { font-size: 9px; }
   #bb-toggle-wrap { display: none; }
   #canvas-wrap {
-    flex: 1; min-height: 0;
+    flex: 1; min-height: 0; overflow: hidden;
     border-left: none; border-right: none;
   }
   #bottom-panel {
-    height: 72px; padding: 0 16px; gap: 0;
+    height: 80px; flex-shrink: 0; padding: 0 12px; gap: 0;
     border-radius: 0; border-left: none; border-right: none; border-bottom: none;
-    justify-content: space-between;
+    justify-content: center; align-items: center;
   }
   #phases { display: none; }
   #action-wrap { display: none; }
@@ -296,8 +296,8 @@ body {
         </div>
         <div id="kb-hint">← → naviga · ↑ ↓ cambia mano</div>
       <div id="mobile-nav">
-  <button onclick="step(-1)" style="flex:1;height:48px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:24px;cursor:pointer;">◀</button>
-  <button onclick="step(1)"  style="flex:1;height:48px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:24px;cursor:pointer;">▶</button>
+  <button onclick="step(-1)" style="flex:1;height:56px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;active:opacity:.7;">◀</button>
+  <button onclick="step(1)"  style="flex:1;height:56px;background:#1a1e2a;border:1px solid #323b52;border-radius:12px;color:#e8ecf0;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">▶</button>
 </div>
       </div>
     </div>
