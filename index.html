@@ -205,12 +205,12 @@ body {
 @media (max-width: 768px) {
   #replayer.visible { flex-direction: column; gap: 0; }
   #sidebar { display: none; }
-  #main-area { height: 100vh; flex-direction: column; }
-  #top-bar { height: 42px; padding: 0 10px; gap: 6px; border-radius: 0; border-left: none; border-right: none; border-top: none; }
+  #main-area { height: 100dvh; height: 100vh; flex-direction: column; overflow: hidden; }
+  #top-bar { height: 42px; flex-shrink: 0; padding: 0 10px; gap: 6px; border-radius: 0; border-left: none; border-right: none; border-top: none; }
   #hand-meta { font-size: 9px; }
   #bb-toggle-wrap { display: none; }
-  #canvas-wrap { flex: 1; min-height: 0; border-left: none; border-right: none; }
-  #bottom-panel { height: 80px; padding: 0 12px; gap: 0; border-radius: 0; border-left: none; border-right: none; border-bottom: none; justify-content: center; align-items: center; }
+  #canvas-wrap { flex: 1; min-height: 0; overflow: hidden; border-left: none; border-right: none; }
+  #bottom-panel { height: 80px; flex-shrink: 0; padding: 0 12px; gap: 0; border-radius: 0; border-left: none; border-right: none; border-bottom: none; justify-content: center; align-items: center; }
   #phases { display: none; }
   #action-wrap { display: none; }
   #controls { display: none; }
