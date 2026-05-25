@@ -1105,10 +1105,16 @@ function buildSteps(g){
     const displayAmount = (typeof amount==='number') ? fmt(amount) : (amount||'');
     out.push({activePlayer,action,amount:displayAmount,seats:JSON.parse(JSON.stringify(seats)),pot,board:[...board],shown:{...shown},phase:phase||'preflop',seatActions,...(extra||{})});
   }
-  // Apply all antes silently — pot accumulates but no steps generated
-  for(const a of g.antes){ const p=seats.find(s=>s.name===a.player); if(p){p.stack-=a.amount;p.bet+=a.amount;pot+=a.amount;} }
-  // Reset bets so antes don't show as chips — pot already contains them
-  for(const p of seats) p.bet=0;
+  // Apply all antes — show all chips on table in a single step
+  if(g.antes && g.antes.length){
+    for(const a of g.antes){
+      const p=seats.find(s=>s.name===a.player);
+      if(p){ p.stack-=a.amount; p.bet+=a.amount; pot+=a.amount; }
+    }
+    snap('—','Ante','','preflop');
+    // Reset bets after antes shown
+    for(const p of seats) p.bet=0;
+  }
   // Apply SB and BB silently first
   if(g.smallBlind){ const p=seats.find(s=>s.name===g.smallBlind.player); if(p){p.stack-=g.smallBlind.amount;p.bet=g.smallBlind.amount;pot+=g.smallBlind.amount;} }
   if(g.bigBlind){ const p=seats.find(s=>s.name===g.bigBlind.player); if(p){p.stack-=g.bigBlind.amount;p.bet=g.bigBlind.amount;pot+=g.bigBlind.amount;} }
@@ -1884,7 +1890,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
     else if(act.includes('Raise')||act.includes('Bet'))col='#e07830';
     else if(act.includes('ALL-IN'))col='#ff4444';
     else if(act==='Vince')col='#38cc68';
-    else if(act==='SB'||act==='BB')col='#7080a0';
+    else if(act==='SB'||act==='BB'||act==='Ante')col='#7080a0';
     ctx.font=`700 ${fsStack}px 'Segoe UI',sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle=col;
