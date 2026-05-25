@@ -477,7 +477,7 @@ function parseIPokerHand(text){
   const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
 
-  let phase='pre', inSummary=false;
+  let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
@@ -515,6 +515,8 @@ function parseIPokerHand(text){
     if(dm){ s.holeCards[dm[1]]=convertIPokerCards(dm[2]); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
 
     // Blinds: "ChiappoGirl: Post SB €15.00"
+    const antem=l.match(/^([^:]+):\s+Post Ante\s+€([\d,.]+)/i);
+    if(antem){ const av=parseFloat(antem[2].replace(/,/g,'')); s.antes.push({player:antem[1].trim(),amount:av}); if(!ante0) ante0=av; continue; }
     const sbm=l.match(/^([^:]+):\s+Post SB\s+€([\d,.]+)/i); if(sbm) sbm[1]=sbm[1].trim();
     if(sbm){ s.smallBlind={player:sbm[1],amount:parseFloat(sbm[2].replace(/,/g,''))}; continue; }
     const bbm=l.match(/^([^:]+):\s+Post BB\s+€([\d,.]+)/i); if(bbm) bbm[1]=bbm[1].trim();
