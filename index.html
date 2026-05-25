@@ -702,7 +702,7 @@ async function shareHandByIdx(idx, btn){
       btn.textContent = '✓';
       btn.style.color = 'var(--gold)';
       btn.style.borderColor = 'var(--gold)';
-      setTimeout(()=>{ btn.textContent = '↑'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+      setTimeout(()=>{ btn.textContent = '🔗'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
     } else {
       prompt('Copia questo link:', url);
       btn.textContent = '↑';
@@ -767,6 +767,19 @@ function anonymizeHandText(handText, seats){
   return text;
 }
 
+async function copyHandTxt(idx, btn){
+  const handText = allHandsRaw[idx];
+  if(!handText){ alert('Testo originale non disponibile.'); return; }
+  try {
+    await navigator.clipboard.writeText(handText);
+    btn.textContent = '\u2713';
+    btn.style.color = 'var(--gold)';
+    btn.style.borderColor = 'var(--gold)';
+    setTimeout(()=>{ btn.textContent = '\ud83d\udccb'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+  } catch(e) {
+    prompt('Copia il testo della mano:', handText);
+  }
+}
 function toggleAnon(){
   anonMode = !anonMode;
   const btn = document.getElementById('btn-anon');
@@ -850,7 +863,8 @@ function renderSidebar(){
         <div class="hand-blinds">${fmt(h.header.sb)}/${fmt(h.header.bb)}</div>
         <div class="hand-result ${result}">${resultTxt}</div>
       </div>
-      <button class="hand-share-icon" onclick="event.stopPropagation();shareHandByIdx(${i},this)" title="Condividi">↑</button>
+      <button class="hand-share-icon" onclick="event.stopPropagation();shareHandByIdx(${i},this)" title="Condividi link">🔗</button>
+      <button class="hand-share-icon" onclick="event.stopPropagation();copyHandTxt(${i},this)" title="Copia testo mano">📋</button>
     </div>`;
   }).join('');
 }
@@ -1399,12 +1413,6 @@ function drawBetChip(ctx,s,pos,W,H){
 
   const d = Math.sqrt(dx*dx+dy*dy)||1;
 
-  // Keep chip at fixed absolute distance from player, not from center.
-  // chipOffset = how far from the seat toward center the chip sits (in px).
-  // Closer seats (top/bottom) have smaller d, so same t puts chip near center.
-  // Use a fixed px offset instead: chip always sits ~chipPx pixels from seat.
-  // Fixed px offset from seat: smaller for close seats, larger for far seats
-  // This keeps chips visually near the player regardless of table position
   const t = 0.40;
   let bx = x + dx*t, by = y + dy*t;
 
@@ -1435,7 +1443,7 @@ function drawBetChip(ctx,s,pos,W,H){
   const cy = by;
 
   ctx.beginPath(); ctx.arc(cx, cy+1.5, r, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill();
 
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
   ctx.fillStyle = '#ffffff'; ctx.fill();
@@ -1447,8 +1455,6 @@ function drawBetChip(ctx,s,pos,W,H){
   hl.addColorStop(0,'rgba(0,0,0,.2)'); hl.addColorStop(1,'rgba(0,0,0,0)');
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
   ctx.fillStyle = hl; ctx.fill();
-
-  // ── ALL-IN badge drawn separately in drawAllInBadges() ──
 
   ctx.restore();
 }
