@@ -1125,6 +1125,9 @@ function buildSteps(g){
       const p=seats.find(s=>s.name===a.player);
       if(p){ p.stack-=a.amount; p.bet+=a.amount; pot+=a.amount; }
     }
+    // Show hero cards during ante step
+    const hero=Object.keys(g.holeCards)[0];
+    if(hero) shown[hero]=g.holeCards[hero];
     snap('—','Ante','','preflop');
     // Reset bets after antes shown
     for(const p of seats) p.bet=0;
