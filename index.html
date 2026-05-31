@@ -223,6 +223,14 @@ body {
 }
 @media (min-width:1400px){ :root { --sidebar:250px; } }
 
+
+.pos-pill {
+  padding:2px 7px; border-radius:10px; font-size:9px; font-weight:700; letter-spacing:.4px;
+  background:transparent; border:1px solid var(--border2); color:var(--text3);
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.pos-pill:hover { border-color:var(--border); color:var(--text2); }
+.pos-pill.active { color:#0a0c10; border-color:transparent; }
 </style>
 </head>
 <body>
@@ -261,6 +269,7 @@ body {
         <span id="sidebar-title">MANI</span>
         <span id="sidebar-count">0</span>
       </div>
+      <div id="pos-filter" style="padding:6px 6px 0;display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;"></div>
       <div id="hand-list"></div>
       <div id="sidebar-add">
         <button onclick="openModal()">+ Aggiungi mani</button>
@@ -307,8 +316,8 @@ body {
           <button class="ctrl-btn" onclick="goToStep(steps.length-1)">⏭</button>
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx-1)" title="Mano precedente">▲ Prec</button>
-          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx+1)" title="Mano successiva">▼ Succ</button>
+          <button class="ctrl-btn hand-nav" onclick="stepHand(-1)" title="Mano precedente">▲ Prec</button>
+          <button class="ctrl-btn hand-nav" onclick="stepHand(1)" title="Mano successiva">▼ Succ</button>
         </div>
         <div id="kb-hint">← → naviga · ↑ ↓ cambia mano</div>
       <div id="mobile-nav">
@@ -373,6 +382,23 @@ body {
           <p style="margin:0;">Le carte degli avversari compaiono automaticamente all'ultimo step quando disponibili.</p>
           <p style="margin:0;">Le mani con <span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid #4a4a4a;vertical-align:middle;"></span> contorno nella sidebar sono quelle dove hero ha giocato.</p>
           <p style="margin:0;">Usa il toggle <b style="color:#ffffff;">Chips / BB</b> per visualizzare gli stack in big blind o in valore assoluto.</p>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;">FILTRO POSIZIONI</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#666666;line-height:1.6;">
+          <p style="margin:0;">Nella sidebar appaiono automaticamente le pills delle posizioni presenti nelle mani caricate (BTN, SB, BB, UTG…).</p>
+          <p style="margin:0;">Clicca una o più pills per filtrare la lista — il contatore mostra <b style="color:#ffffff">filtrate/totale</b>. Clicca di nuovo per deselezionare.</p>
+          <p style="margin:0;">La navigazione ▲ Prec / ▼ Succ e i tasti <span style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;padding:1px 6px;font-family:monospace;color:#ffffff;font-size:11px;">↑ ↓</span> scorrono solo tra le mani filtrate.</p>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;">COPIA MANO</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#666666;line-height:1.6;">
+          <p style="margin:0;"><b style="color:#ffffff">🔗</b> accanto a ogni mano copia il link breve del replayer per condividerla.</p>
+          <p style="margin:0;"><b style="color:#ffffff">📋</b> copia il testo grezzo della mano in formato .txt — incollalo in un altro replayer o per analisi.</p>
         </div>
       </div>
 
@@ -797,7 +823,7 @@ function clearHands(){
   if(!allHands.length) return;
   if(!confirm(`Cancellare tutte le ${allHands.length} mani caricate?`)) return;
   if(timer){clearInterval(timer);timer=null;document.getElementById('play-btn').textContent='▶';}
-  allHands=[]; curHandIdx=0; gs=null; steps=[]; cur=0;
+  allHands=[]; curHandIdx=0; gs=null; steps=[]; cur=0; posFilter=new Set();
   document.getElementById('replayer').className='';
   document.getElementById('input-panel').style.display='block';
 }
@@ -824,10 +850,53 @@ function romanToArabic(r){
 }
 
 // ── SIDEBAR ─────────────────────────────────────────────────────
+
+// ── POSITION FILTER ──────────────────────────────────────────
+let posFilter = new Set(); // empty = show all
+
+function renderPosFilter(){
+  const container = document.getElementById('pos-filter');
+  if(!container) return;
+
+  // Collect all positions present in loaded hands
+  const positions = new Set();
+  allHands.forEach(h => {
+    const heroSeat = h.seats.find(s => s.isHero);
+    if(heroSeat && heroSeat.pos) positions.add(heroSeat.pos);
+  });
+
+  if(positions.size === 0){ container.innerHTML=''; return; }
+
+  // Order: BTN SB BB UTG UTG+1 UTG+2 MP HJ CO
+  const order = ['BTN','SB','BB','UTG','UTG+1','UTG+2','MP','HJ','CO'];
+  const sorted = order.filter(p => positions.has(p));
+
+  container.innerHTML = sorted.map(pos => {
+    const col = POS_COLOR[pos] || '#888';
+    const isActive = posFilter.has(pos);
+    return `<button class="pos-pill${isActive?' active':''}"
+      style="${isActive ? `background:${col};` : ''}"
+      onclick="togglePosFilter('${pos}')">${pos}</button>`;
+  }).join('');
+}
+
+function togglePosFilter(pos){
+  if(posFilter.has(pos)) posFilter.delete(pos);
+  else posFilter.add(pos);
+  renderPosFilter();
+  renderSidebar();
+}
+
 function renderSidebar(){
-  document.getElementById('sidebar-count').textContent = allHands.length;
+  renderPosFilter();
+  const filtered = posFilter.size > 0
+    ? allHands.map((h,i)=>({h,i})).filter(({h})=>{ const hs=h.seats.find(s=>s.isHero); return hs&&posFilter.has(hs.pos); })
+    : allHands.map((h,i)=>({h,i}));
+  document.getElementById('sidebar-count').textContent = posFilter.size > 0
+    ? filtered.length + '/' + allHands.length
+    : allHands.length;
   const list = document.getElementById('hand-list');
-  list.innerHTML = allHands.map((h,i)=>{
+  list.innerHTML = filtered.map(({h,i},j)=>{
     const hero = Object.keys(h.holeCards)[0];
     const cards = hero ? h.holeCards[hero] : [];
     const heroSeat = h.seats.find(s=>s.isHero);
@@ -855,8 +924,8 @@ function renderSidebar(){
       const allActions = [...(h.actions.preflop||[]),...(h.actions.flop||[]),...(h.actions.turn||[]),...(h.actions.river||[])];
       return allActions.some(a => a.player===hero && (a.action.includes('calls')||a.action.includes('raises')||a.action.includes('bets')));
     })();
-    return `<div class="hand-item${i===curHandIdx?' active':''}" onclick="selectHand(${i})" style="${played && i!==curHandIdx ? 'border-color:#4a90d9;box-shadow:inset 0 0 0 1px #4a90d933;' : ''}">
-      <div class="hand-num${i===curHandIdx?' active':''}">${i+1}</div>
+    return `<div class="hand-item${i===curHandIdx?' active':''}" data-idx="${i}" onclick="selectHand(${i})" style="${played && i!==curHandIdx ? 'border-color:#4a90d9;box-shadow:inset 0 0 0 1px #4a90d933;' : ''}">
+      <div class="hand-num${i===curHandIdx?' active':''}">${j+1}</div>
       <div class="hand-cards">${cardsHtml}</div>
       <div class="hand-info">
         <div class="hand-pos" style="color:${posCol}">${pos} · Lv ${romanToArabic(h.header.level)}</div>
@@ -867,6 +936,27 @@ function renderSidebar(){
       <button class="hand-share-icon" onclick="event.stopPropagation();copyHandTxt(${i},this)" title="Copia testo mano">📋</button>
     </div>`;
   }).join('');
+}
+
+
+// Returns sorted array of allHands indices matching current posFilter
+function filteredIndices(){
+  if(posFilter.size === 0) return allHands.map((_,i)=>i);
+  return allHands.map((_,i)=>i).filter(i=>{
+    const hs = allHands[i].seats.find(s=>s.isHero);
+    return hs && posFilter.has(hs.pos);
+  });
+}
+
+// Navigate to prev/next hand within filtered list
+function stepHand(dir){
+  const fi = filteredIndices();
+  if(!fi.length) return;
+  const cur = fi.indexOf(curHandIdx);
+  const next = cur < 0
+    ? (dir > 0 ? 0 : fi.length-1)
+    : (cur + dir + fi.length) % fi.length;
+  selectHand(fi[next]);
 }
 
 function selectHand(idx){
@@ -895,11 +985,15 @@ function selectHand(idx){
     (h.tournament?` &nbsp;·&nbsp; #${h.tournament}`:'')+
     ` &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`+
     (h.ante?` &nbsp;·&nbsp; Ante ${fmt(h.ante)}`:'');
-  // update sidebar highlight
-  document.querySelectorAll('.hand-item').forEach((el,i)=>{ el.className='hand-item'+(i===idx?' active':''); });
-  document.querySelectorAll('.hand-num').forEach((el,i)=>{ el.className='hand-num'+(i===idx?' active':''); });
+  // update sidebar highlight — usa data-idx per gestire la lista filtrata
+  document.querySelectorAll('.hand-item').forEach(el=>{
+    const elIdx = +el.dataset.idx;
+    el.className = 'hand-item' + (elIdx===idx ? ' active' : '');
+    const numEl = el.querySelector('.hand-num');
+    if(numEl) numEl.className = 'hand-num' + (elIdx===idx ? ' active' : '');
+  });
   // scroll sidebar item into view
-  const activeEl=document.querySelectorAll('.hand-item')[idx];
+  const activeEl = document.querySelector(`.hand-item[data-idx="${idx}"]`);
   if(activeEl) activeEl.scrollIntoView({block:'nearest',behavior:'smooth'});
   setTimeout(()=>{ renderCanvas(steps[0]); goToStep(0); },60);
 }
@@ -1230,8 +1324,8 @@ document.addEventListener('keydown',e=>{
   switch(e.key){
     case 'ArrowRight': e.preventDefault(); step(1); break;
     case 'ArrowLeft':  e.preventDefault(); step(-1); break;
-    case 'ArrowDown':  e.preventDefault(); selectHand(curHandIdx+1); break;
-    case 'ArrowUp':    e.preventDefault(); selectHand(curHandIdx-1); break;
+    case 'ArrowDown':  e.preventDefault(); stepHand(1); break;
+    case 'ArrowUp':    e.preventDefault(); stepHand(-1); break;
     case ' ':          e.preventDefault(); togglePlay(); break;
     case 'Escape':
       if(document.getElementById('guide-overlay').style.display==='flex') closeGuide();
