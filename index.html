@@ -380,7 +380,7 @@ body {
           <p style="margin:0;">↑ accanto a ogni mano nella sidebar per copiare il link di condivisione.</p>
           <p style="margin:0;">Se hero folda, le carte restano visibili in trasparenza — passa il mouse sopra per vederle a piena opacità.</p>
           <p style="margin:0;">Le carte degli avversari compaiono automaticamente all'ultimo step quando disponibili.</p>
-          <p style="margin:0;">Nella lista mani laterale quelle contornate di azzurro chiaro sono quelle che Hero ha giocato.</p>
+          <p style="margin:0;">Le mani con <span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid #4a4a4a;vertical-align:middle;"></span> contorno nella sidebar sono quelle dove hero ha giocato.</p>
           <p style="margin:0;">Usa il toggle <b style="color:#ffffff;">Chips / BB</b> per visualizzare gli stack in big blind o in valore assoluto.</p>
         </div>
       </div>
@@ -398,7 +398,7 @@ body {
         <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#444444;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #1f1f1f;">COPIA MANO</p>
         <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#666666;line-height:1.6;">
           <p style="margin:0;"><b style="color:#ffffff">🔗</b> accanto a ogni mano copia il link breve del replayer per condividerla.</p>
-          <p style="margin:0;"><b style="color:#ffffff">📋</b> copia il testo grezzo della mano in formato .txt — incollalo in un altro tool (come GTO Wizard o ICIMIZER) per continuare la tua analisi.</p>
+          <p style="margin:0;"><b style="color:#ffffff">📋</b> copia il testo grezzo della mano in formato .txt — incollalo in un altro replayer o per analisi.</p>
         </div>
       </div>
 
@@ -1968,10 +1968,10 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   // ── 5. NAME + STACK (clipped to full text area) ──
   const textW = pw - posW - (posW ? 10 : 8);
   const textCX = plateLeft + 4 + textW/2;
-  const fsName  = Math.max(11, W*.013);
-  const fsStack = Math.max(11, W*.013);
-  const nameY  = plateTop + ph*0.30;
-  const stackY = plateTop + ph*0.72;
+  const fsName  = Math.max(9, W*.010);
+  const fsStack = Math.max(12, W*.015);
+  const nameY  = plateTop + ph*0.28;
+  const stackY = plateTop + ph*0.70;
 
   ctx.save();
   ctx.beginPath(); ctx.rect(plateLeft+3, plateTop+2, textW, ph-4); ctx.clip();
@@ -1979,7 +1979,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   // Name
   ctx.font=`700 ${fsName}px 'Segoe UI',sans-serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillStyle = s.folded?'#333333' : isActive?'#ffffff' : '#888888';
+  ctx.fillStyle = s.folded?'#333333' : isActive?'#aaaaaa' : '#555555';
   const displayName = anonMode && gs ? anonName(s.name, gs.seats) : s.name;
   ctx.fillText(displayName.length>16?displayName.slice(0,16)+'…':displayName, textCX, nameY);
 
@@ -2002,7 +2002,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   } else {
     ctx.font=`${fsStack}px 'Courier New',monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle = s.folded ? '#333333' : '#555555';
+    ctx.fillStyle = s.folded ? '#3a3a3a' : '#ffffff';
     ctx.fillText(fmtStack(s.stack), textCX, stackY);
   }
   ctx.restore();
