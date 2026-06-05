@@ -1285,6 +1285,23 @@ function buildSteps(g){
         continue;
       }
       snap(a.player,action,amount,ph);
+      // If at least one player is all-in and pot is closed (no one can act further),
+      // reveal all showdown cards immediately
+      const activePlayers = seats.filter(s => !s.folded);
+      const someAllin = activePlayers.some(s => s.allin || s.stack === 0);
+      if(someAllin && activePlayers.length > 1 && g.showdown && Object.keys(g.showdown).length > 0){
+        // Pot is closed when every active player has the same bet OR is all-in
+        const maxBet = Math.max(...activePlayers.map(s => s.bet));
+        const potClosed = activePlayers.every(s => s.bet === maxBet || s.allin || s.stack === 0);
+        if(potClosed){
+          for(const [name, cards] of Object.entries(g.showdown)){
+            if(cards && cards.length) shown[name] = cards;
+          }
+          // Also show hero hole cards
+          const heroName = Object.keys(g.holeCards)[0];
+          if(heroName && g.holeCards[heroName]) shown[heroName] = g.holeCards[heroName];
+        }
+      }
     }
   }
   const sdShown={...shown};
