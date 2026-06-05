@@ -493,7 +493,7 @@ function parseIPokerHand(text){
   const tableLine = lines.find(l => l.startsWith('Table ') && !l.startsWith('Table Info')) || '';
   if(/Mystery KO|Mystery Bounty/i.test(tableLine)) s.header.mode='Mystery Bounty';
   else if(/Progressive KO|PKO/i.test(tableLine)) s.header.mode='PKO';
-  else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='Bounty';
+  else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='PKO';
   else if(/Rebuy/i.test(tableLine)) s.header.mode='Rebuy';
   else s.header.mode='Normal';
   // Buy-in from Table line: Buy-In: €4.40 + €4.40 + €1.20
@@ -1030,6 +1030,7 @@ function parseHand(text){
   else if(/Bounty|Knockout|KO/i.test(modeLine)) s.header.mode='Bounty';
   else if(/Rebuy/i.test(modeLine)) s.header.mode='Rebuy';
   else if(/Turbo/i.test(modeLine)) s.header.mode='Turbo';
+  else if(text.includes('bounty')) s.header.mode='PKO';
   else s.header.mode='Normal';
   // Room: PokerStars or Sisal
   s.header.room = lines[0].startsWith('Sisal') ? 'Sisal' : 'PokerStars';
