@@ -642,7 +642,7 @@ function loadFromInput(){
   if(!txt){ alert('Incolla almeno una mano!'); return; }
   const raw = splitHands(txt);
   if(!raw.length){ alert('Nessuna mano trovata nel testo.'); return; }
-  allHandsRaw = raw;
+  allHandsRaw = [];
   allHands = [];
   for(const r of raw){
     try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn('Skip hand:', e.message); }
@@ -2209,7 +2209,8 @@ let anonMode = false;
   async function loadAndDisplay(handText){
     const raw = splitHands(handText);
     if(!raw.length) return;
-    allHandsRaw = raw;
+    allHandsRaw = [];
+    allHands = [];
     for(const r of raw){
       try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn(e); }
     }
