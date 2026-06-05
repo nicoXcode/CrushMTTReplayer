@@ -615,10 +615,16 @@ function loadFromFile(input){
     if(!txt){ alert('File vuoto o non leggibile.'); return; }
     const raw = splitHands(txt);
     if(!raw.length){ alert('Nessuna mano trovata nel file.'); return; }
-    allHandsRaw = raw;
+    allHandsRaw = [];
     allHands = [];
     for(const r of raw){
-      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(err){ console.warn('Skip hand:', err.message); }
+      try {
+        const _h=parseHandAuto(r);
+        if(_h && Object.keys(_h.holeCards||{}).length){
+          allHands.push(_h);
+          allHandsRaw.push(r);
+        }
+      } catch(err){ console.warn('Skip hand:', err.message); }
     }
     if(!allHands.length){ alert('Nessuna mano valida trovata nel file.'); return; }
     document.getElementById('input-panel').style.display='none';
@@ -639,7 +645,7 @@ function loadFromInput(){
   allHandsRaw = raw;
   allHands = [];
   for(const r of raw){
-    try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn('Skip hand:', e.message); }
+    try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn('Skip hand:', e.message); }
   }
   if(!allHands.length){ alert('Nessuna mano valida trovata.'); return; }
   document.getElementById('input-panel').style.display='none';
@@ -832,7 +838,7 @@ function addHandsFromModal(){
   if(!txt){ closeModal(); return; }
   const raw=splitHands(txt);
   let added=0;
-  for(const r of raw){ try{ const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); added++; } catch(e){ console.warn(e); } }
+  for(const r of raw){ try{ const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); added++; } } catch(e){ console.warn(e); } }
   closeModal();
   renderSidebar();
   if(added>0) alert(`${added} mano/i aggiunta/e.`);
@@ -1028,7 +1034,7 @@ function parseHand(text){
   // Room: PokerStars or Sisal
   s.header.room = lines[0].startsWith('Sisal') ? 'Sisal' : 'PokerStars';
   const bm=(lines[1]||'').match(/Seat #(\d+) is the button/)||text.match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
-  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
+  for(const l of lines){ const sm=l.match(/^Seat (\d+): (.+?) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
   const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
@@ -1037,7 +1043,7 @@ function parseHand(text){
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
       s.summaryLines.push(l);
-      const shm = l.match(/^Seat \d+: (\S+).*(?:showed|mucked) \[(.+?)\]/);
+      const shm = l.match(/^Seat \d+: (.+?)(?:\s+\([^)]+\))? (?:showed|mucked) \[(.+?)\]/);
       if(shm) s.showdown[shm[1]] = shm[2].split(' ');
       continue;
     }
@@ -1045,11 +1051,11 @@ function parseHand(text){
     if(l.startsWith('*** FLOP')){ const fm=l.match(/\[(.+?)\]/); if(fm) s.board.push(...fm[1].split(' ')); phase='flop'; continue; }
     if(l.startsWith('*** TURN')){ const t2=l.match(/\[.*?\] \[(\S+)\]/); if(t2) s.board.push(t2[1]); phase='turn'; continue; }
     if(l.startsWith('*** RIVER')){ const r2=l.match(/\[.*?\] \[(\S+)\]/); if(r2) s.board.push(r2[1]); phase='river'; continue; }
-    const dm=l.match(/^Dealt to (\S+) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
+    const dm=l.match(/^Dealt to (.+?) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
     const inlineShow=l.match(/^(\S+): (?:shows|mucks hand with) \[(.+)\]/); if(inlineShow) s.showdown[inlineShow[1]]=inlineShow[2].split(' ');
     const am=l.match(/^(\S+?)(?::| ) posts (?:the )?ante ([\d,]+)/); if(am){ s.antes.push({player:am[1],amount:+am[2].replace(/,/g,'')}); if(!ante0) ante0=+am[2].replace(/,/g,''); continue; }
-    const sbm=l.match(/^(\S+?)(?::| ) posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
-    const bbm=l.match(/^(\S+?)(?::| ) posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
+    const sbm=l.match(/^(.+?):\s+posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
+    const bbm=l.match(/^(.+?):\s+posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
     if(l.match(/^Uncalled bet/)) continue;
     if(l.match(/doesn't show hand/)) continue;
     if(l.match(/is sitting out/)) continue;
@@ -1059,7 +1065,7 @@ function parseHand(text){
     if(l.match(/will be allowed to play/)) continue;
     if(l.match(/out of hand/)) continue;
     if(l.match(/moved from another table/)) continue;
-    const acm=l.match(/^(\S+?)(?::| ) (folds|checks|calls|raises|bets)(.+)?/);
+    const acm=l.match(/^(.+?):\s+(folds|checks|calls|raises|bets)(.+)?/);
     if(acm&&phase!=='pre'){
       const acmPlayer=acm[1];
       let act=acm[2],amt=0;
@@ -1088,7 +1094,7 @@ function parseHand888(text){
   s.header.level = '?';
   const btnM = text.match(/Seat (\d+) is the button/); s.header.button = btnM ? +btnM[1] : 1;
   for(const l of lines){
-    const sm = l.match(/^Seat (\d+):\s+(\S+)\s*\(\s*([\d,]+)\s*\)/);
+    const sm = l.match(/^Seat (\d+):\s+(.+?)\s*\(\s*([\d,]+)\s*\)/);
     if(sm) s.seats.push({seat:+sm[1], name:sm[2], chips:+sm[3].replace(/,/g,''), stack:+sm[3].replace(/,/g,''), bet:0, folded:false, allin:false, isHero:false, pos:'', bounty:0});
   }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
@@ -2204,7 +2210,7 @@ let anonMode = false;
     if(!raw.length) return;
     allHandsRaw = raw;
     for(const r of raw){
-      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn(e); }
+      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn(e); }
     }
     if(!allHands.length) return;
     document.getElementById('input-panel').style.display='none';
