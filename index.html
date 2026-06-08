@@ -207,6 +207,14 @@ body {
 @media (min-width: 769px) {
   #mobile-nav { display: none; }
 }
+
+.pos-pill {
+  padding:2px 7px; border-radius:10px; font-size:9px; font-weight:700; letter-spacing:.4px;
+  background:transparent; border:1px solid var(--border2); color:var(--text3);
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.pos-pill:hover { border-color:var(--border); color:var(--text2); }
+.pos-pill.active { color:#0a0c10; border-color:transparent; }
 </style>
 </head>
 <body>
@@ -245,6 +253,7 @@ body {
         <span id="sidebar-title">MANI</span>
         <span id="sidebar-count">0</span>
       </div>
+      <div id="pos-filter" style="padding:6px 6px 0;display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;"></div>
       <div id="hand-list"></div>
       <div id="sidebar-add">
         <button onclick="openModal()">+ Aggiungi mani</button>
@@ -291,8 +300,8 @@ body {
           <button class="ctrl-btn" onclick="goToStep(steps.length-1)">⏭</button>
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx-1)" title="Mano precedente">▲ Prec</button>
-          <button class="ctrl-btn hand-nav" onclick="selectHand(curHandIdx+1)" title="Mano successiva">▼ Succ</button>
+          <button class="ctrl-btn hand-nav" onclick="stepHand(-1)" title="Mano precedente">▲ Prec</button>
+          <button class="ctrl-btn hand-nav" onclick="stepHand(1)" title="Mano successiva">▼ Succ</button>
         </div>
         <div id="kb-hint">← → naviga · ↑ ↓ cambia mano</div>
       <div id="mobile-nav">
@@ -355,6 +364,24 @@ body {
           <p style="margin:0;">Usa il toggle <b style="color:#d4a017">Chips / BB</b> per visualizzare gli stack in big blind o in valore assoluto.</p>
         </div>
       </div>
+
+      <div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">FILTRO POSIZIONI</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#8a96a8;line-height:1.6;">
+          <p style="margin:0;">Nella sidebar appaiono automaticamente le pills delle posizioni presenti nelle mani caricate (BTN, SB, BB, UTG…).</p>
+          <p style="margin:0;">Clicca una o più pills per filtrare la lista — il contatore mostra <b style="color:#d4a017">filtrate/totale</b>. Clicca di nuovo per deselezionare.</p>
+          <p style="margin:0;">La navigazione ▲ Prec / ▼ Succ e i tasti <span style="background:#1a1e2a;border:1px solid #323b52;border-radius:4px;padding:1px 6px;font-family:monospace;color:#e8ecf0;font-size:11px;">↑ ↓</span> scorrono solo tra le mani filtrate.</p>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#8a96a8;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #252b3a;">COPIA MANO</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#8a96a8;line-height:1.6;">
+          <p style="margin:0;"><b style="color:#d4a017">🔗</b> accanto a ogni mano copia il link breve del replayer per condividerla.</p>
+          <p style="margin:0;"><b style="color:#d4a017">📋</b> copia il testo grezzo della mano in formato .txt — incollalo in un altro replayer o per analisi.</p>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -447,7 +474,7 @@ function parseIPokerHand(text){
   const tableLine = lines.find(l => l.startsWith('Table ') && !l.startsWith('Table Info')) || '';
   if(/Mystery KO|Mystery Bounty/i.test(tableLine)) s.header.mode='Mystery Bounty';
   else if(/Progressive KO|PKO/i.test(tableLine)) s.header.mode='PKO';
-  else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='Bounty';
+  else if(/Bounty|Knockout/i.test(tableLine)) s.header.mode='PKO';
   else if(/Rebuy/i.test(tableLine)) s.header.mode='Rebuy';
   else s.header.mode='Normal';
   // Buy-in from Table line: Buy-In: €4.40 + €4.40 + €1.20
@@ -479,6 +506,14 @@ function parseIPokerHand(text){
 
   let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
+    if(l.startsWith('*** SHOW DOWN') || l.startsWith('*** SHOWDOWN')){ phase='showdown'; continue; }
+    if(phase==='showdown'){
+      const sdm=l.match(/^(.+?):\s+shows?\s+\[(.+?)\]/i);
+      if(sdm){ s.showdown[sdm[1]]=sdm[2].split(' '); }
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm&&s.actions.river) s.actions.river.push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false});
+      continue;
+    }
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
       s.summaryLines.push(l);
@@ -569,10 +604,16 @@ function loadFromFile(input){
     if(!txt){ alert('File vuoto o non leggibile.'); return; }
     const raw = splitHands(txt);
     if(!raw.length){ alert('Nessuna mano trovata nel file.'); return; }
-    allHandsRaw = raw;
+    allHandsRaw = [];
     allHands = [];
     for(const r of raw){
-      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(err){ console.warn('Skip hand:', err.message); }
+      try {
+        const _h=parseHandAuto(r);
+        if(_h && Object.keys(_h.holeCards||{}).length){
+          allHands.push(_h);
+          allHandsRaw.push(r);
+        }
+      } catch(err){ console.warn('Skip hand:', err.message); }
     }
     if(!allHands.length){ alert('Nessuna mano valida trovata nel file.'); return; }
     document.getElementById('input-panel').style.display='none';
@@ -590,10 +631,10 @@ function loadFromInput(){
   if(!txt){ alert('Incolla almeno una mano!'); return; }
   const raw = splitHands(txt);
   if(!raw.length){ alert('Nessuna mano trovata nel testo.'); return; }
-  allHandsRaw = raw;
+  allHandsRaw = [];
   allHands = [];
   for(const r of raw){
-    try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn('Skip hand:', e.message); }
+    try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn('Skip hand:', e.message); }
   }
   if(!allHands.length){ alert('Nessuna mano valida trovata.'); return; }
   document.getElementById('input-panel').style.display='none';
@@ -682,7 +723,7 @@ async function shareHandByIdx(idx, btn){
       btn.textContent = '✓';
       btn.style.color = 'var(--gold)';
       btn.style.borderColor = 'var(--gold)';
-      setTimeout(()=>{ btn.textContent = '↑'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+      setTimeout(()=>{ btn.textContent = '🔗'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
     } else {
       prompt('Copia questo link:', url);
       btn.textContent = '↑';
@@ -747,6 +788,19 @@ function anonymizeHandText(handText, seats){
   return text;
 }
 
+async function copyHandTxt(idx, btn){
+  const handText = allHandsRaw[idx];
+  if(!handText){ alert('Testo originale non disponibile.'); return; }
+  try {
+    await navigator.clipboard.writeText(handText);
+    btn.textContent = '\u2713';
+    btn.style.color = 'var(--gold)';
+    btn.style.borderColor = 'var(--gold)';
+    setTimeout(()=>{ btn.textContent = '\ud83d\udccb'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+  } catch(e) {
+    prompt('Copia il testo della mano:', handText);
+  }
+}
 function toggleAnon(){
   anonMode = !anonMode;
   const btn = document.getElementById('btn-anon');
@@ -764,7 +818,7 @@ function clearHands(){
   if(!allHands.length) return;
   if(!confirm(`Cancellare tutte le ${allHands.length} mani caricate?`)) return;
   if(timer){clearInterval(timer);timer=null;document.getElementById('play-btn').textContent='▶';}
-  allHands=[]; curHandIdx=0; gs=null; steps=[]; cur=0;
+  allHands=[]; curHandIdx=0; gs=null; steps=[]; cur=0; posFilter=new Set();
   document.getElementById('replayer').className='';
   document.getElementById('input-panel').style.display='block';
 }
@@ -773,7 +827,7 @@ function addHandsFromModal(){
   if(!txt){ closeModal(); return; }
   const raw=splitHands(txt);
   let added=0;
-  for(const r of raw){ try{ const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); added++; } catch(e){ console.warn(e); } }
+  for(const r of raw){ try{ const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); added++; } } catch(e){ console.warn(e); } }
   closeModal();
   renderSidebar();
   if(added>0) alert(`${added} mano/i aggiunta/e.`);
@@ -791,10 +845,53 @@ function romanToArabic(r){
 }
 
 // ── SIDEBAR ─────────────────────────────────────────────────────
+
+// ── POSITION FILTER ──────────────────────────────────────────
+let posFilter = new Set(); // empty = show all
+
+function renderPosFilter(){
+  const container = document.getElementById('pos-filter');
+  if(!container) return;
+
+  // Collect all positions present in loaded hands
+  const positions = new Set();
+  allHands.forEach(h => {
+    const heroSeat = h.seats.find(s => s.isHero);
+    if(heroSeat && heroSeat.pos) positions.add(heroSeat.pos);
+  });
+
+  if(positions.size === 0){ container.innerHTML=''; return; }
+
+  // Order: BTN SB BB UTG UTG+1 UTG+2 MP HJ CO
+  const order = ['BTN','SB','BB','UTG','UTG+1','UTG+2','MP','HJ','CO'];
+  const sorted = order.filter(p => positions.has(p));
+
+  container.innerHTML = sorted.map(pos => {
+    const col = POS_COLOR[pos] || '#888';
+    const isActive = posFilter.has(pos);
+    return `<button class="pos-pill${isActive?' active':''}"
+      style="${isActive ? `background:${col};` : ''}"
+      onclick="togglePosFilter('${pos}')">${pos}</button>`;
+  }).join('');
+}
+
+function togglePosFilter(pos){
+  if(posFilter.has(pos)) posFilter.delete(pos);
+  else posFilter.add(pos);
+  renderPosFilter();
+  renderSidebar();
+}
+
 function renderSidebar(){
-  document.getElementById('sidebar-count').textContent = allHands.length;
+  renderPosFilter();
+  const filtered = posFilter.size > 0
+    ? allHands.map((h,i)=>({h,i})).filter(({h})=>{ const hs=h.seats.find(s=>s.isHero); return hs&&posFilter.has(hs.pos); })
+    : allHands.map((h,i)=>({h,i}));
+  document.getElementById('sidebar-count').textContent = posFilter.size > 0
+    ? filtered.length + '/' + allHands.length
+    : allHands.length;
   const list = document.getElementById('hand-list');
-  list.innerHTML = allHands.map((h,i)=>{
+  list.innerHTML = filtered.map(({h,i},j)=>{
     const hero = Object.keys(h.holeCards)[0];
     const cards = hero ? h.holeCards[hero] : [];
     const heroSeat = h.seats.find(s=>s.isHero);
@@ -822,17 +919,39 @@ function renderSidebar(){
       const allActions = [...(h.actions.preflop||[]),...(h.actions.flop||[]),...(h.actions.turn||[]),...(h.actions.river||[])];
       return allActions.some(a => a.player===hero && (a.action.includes('calls')||a.action.includes('raises')||a.action.includes('bets')));
     })();
-    return `<div class="hand-item${i===curHandIdx?' active':''}" onclick="selectHand(${i})" style="${played && i!==curHandIdx ? 'border-color:#4a90d9;box-shadow:inset 0 0 0 1px #4a90d933;' : ''}">
-      <div class="hand-num${i===curHandIdx?' active':''}">${i+1}</div>
+    return `<div class="hand-item${i===curHandIdx?' active':''}" data-idx="${i}" onclick="selectHand(${i})" style="${played && i!==curHandIdx ? 'border-color:#4a90d9;box-shadow:inset 0 0 0 1px #4a90d933;' : ''}">
+      <div class="hand-num${i===curHandIdx?' active':''}">${j+1}</div>
       <div class="hand-cards">${cardsHtml}</div>
       <div class="hand-info">
         <div class="hand-pos" style="color:${posCol}">${pos} · Lv ${romanToArabic(h.header.level)}</div>
         <div class="hand-blinds">${fmt(h.header.sb)}/${fmt(h.header.bb)}</div>
         <div class="hand-result ${result}">${resultTxt}</div>
       </div>
-      <button class="hand-share-icon" onclick="event.stopPropagation();shareHandByIdx(${i},this)" title="Condividi">↑</button>
+      <button class="hand-share-icon" onclick="event.stopPropagation();shareHandByIdx(${i},this)" title="Condividi link">🔗</button>
+      <button class="hand-share-icon" onclick="event.stopPropagation();copyHandTxt(${i},this)" title="Copia testo mano">📋</button>
     </div>`;
   }).join('');
+}
+
+
+// Returns sorted array of allHands indices matching current posFilter
+function filteredIndices(){
+  if(posFilter.size === 0) return allHands.map((_,i)=>i);
+  return allHands.map((_,i)=>i).filter(i=>{
+    const hs = allHands[i].seats.find(s=>s.isHero);
+    return hs && posFilter.has(hs.pos);
+  });
+}
+
+// Navigate to prev/next hand within filtered list
+function stepHand(dir){
+  const fi = filteredIndices();
+  if(!fi.length) return;
+  const cur = fi.indexOf(curHandIdx);
+  const next = cur < 0
+    ? (dir > 0 ? 0 : fi.length-1)
+    : (cur + dir + fi.length) % fi.length;
+  selectHand(fi[next]);
 }
 
 function selectHand(idx){
@@ -861,11 +980,15 @@ function selectHand(idx){
     (h.tournament?` &nbsp;·&nbsp; #${h.tournament}`:'')+
     ` &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`+
     (h.ante?` &nbsp;·&nbsp; Ante ${fmt(h.ante)}`:'');
-  // update sidebar highlight
-  document.querySelectorAll('.hand-item').forEach((el,i)=>{ el.className='hand-item'+(i===idx?' active':''); });
-  document.querySelectorAll('.hand-num').forEach((el,i)=>{ el.className='hand-num'+(i===idx?' active':''); });
+  // update sidebar highlight — usa data-idx per gestire la lista filtrata
+  document.querySelectorAll('.hand-item').forEach(el=>{
+    const elIdx = +el.dataset.idx;
+    el.className = 'hand-item' + (elIdx===idx ? ' active' : '');
+    const numEl = el.querySelector('.hand-num');
+    if(numEl) numEl.className = 'hand-num' + (elIdx===idx ? ' active' : '');
+  });
   // scroll sidebar item into view
-  const activeEl=document.querySelectorAll('.hand-item')[idx];
+  const activeEl = document.querySelector(`.hand-item[data-idx="${idx}"]`);
   if(activeEl) activeEl.scrollIntoView({block:'nearest',behavior:'smooth'});
   setTimeout(()=>{ renderCanvas(steps[0]); goToStep(0); },60);
 }
@@ -896,20 +1019,29 @@ function parseHand(text){
   else if(/Bounty|Knockout|KO/i.test(modeLine)) s.header.mode='Bounty';
   else if(/Rebuy/i.test(modeLine)) s.header.mode='Rebuy';
   else if(/Turbo/i.test(modeLine)) s.header.mode='Turbo';
+  else if(text.includes('bounty')) s.header.mode='PKO';
   else s.header.mode='Normal';
   // Room: PokerStars or Sisal
   s.header.room = lines[0].startsWith('Sisal') ? 'Sisal' : 'PokerStars';
   const bm=(lines[1]||'').match(/Seat #(\d+) is the button/)||text.match(/Seat #(\d+) is the button/); s.header.button=bm?+bm[1]:1;
-  for(const l of lines){ const sm=l.match(/^Seat (\d+): (\S+) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
+  for(const l of lines){ const sm=l.match(/^Seat (\d+): (.+?) \(([\d,]+) in chips(?:,\s*€([\d.]+)\s*bounty)?\)/); if(sm) s.seats.push({seat:+sm[1],name:sm[2],chips:+sm[3].replace(/,/g,''),stack:+sm[3].replace(/,/g,''),bet:0,folded:false,allin:false,isHero:false,pos:'',bounty:sm[4]?parseFloat(sm[4]):0}); }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
   const posArr=POS_LABELS_BY_N[n]||POS_LABELS_BY_N[9];
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
   let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
+    if(l.startsWith('*** SHOW DOWN') || l.startsWith('*** SHOWDOWN')){ phase='showdown'; continue; }
+    if(phase==='showdown'){
+      const sdm=l.match(/^(.+?):\s+shows?\s+\[(.+?)\]/i);
+      if(sdm){ s.showdown[sdm[1]]=sdm[2].split(' '); }
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm&&s.actions.river) s.actions.river.push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false});
+      continue;
+    }
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
       s.summaryLines.push(l);
-      const shm = l.match(/^Seat \d+: (\S+).*(?:showed|mucked) \[(.+?)\]/);
+      const shm = l.match(/^Seat \d+: (.+?)(?:\s+\([^)]+\))? (?:showed|mucked) \[(.+?)\]/);
       if(shm) s.showdown[shm[1]] = shm[2].split(' ');
       continue;
     }
@@ -917,13 +1049,17 @@ function parseHand(text){
     if(l.startsWith('*** FLOP')){ const fm=l.match(/\[(.+?)\]/); if(fm) s.board.push(...fm[1].split(' ')); phase='flop'; continue; }
     if(l.startsWith('*** TURN')){ const t2=l.match(/\[.*?\] \[(\S+)\]/); if(t2) s.board.push(t2[1]); phase='turn'; continue; }
     if(l.startsWith('*** RIVER')){ const r2=l.match(/\[.*?\] \[(\S+)\]/); if(r2) s.board.push(r2[1]); phase='river'; continue; }
-    const dm=l.match(/^Dealt to (\S+) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
+    const dm=l.match(/^Dealt to (.+?) \[(.+)\]/); if(dm){ s.holeCards[dm[1]]=dm[2].split(' '); const h=s.seats.find(x=>x.name===dm[1]); if(h) h.isHero=true; continue; }
     const inlineShow=l.match(/^(\S+): (?:shows|mucks hand with) \[(.+)\]/); if(inlineShow) s.showdown[inlineShow[1]]=inlineShow[2].split(' ');
     const am=l.match(/^(\S+?)(?::| ) posts (?:the )?ante ([\d,]+)/); if(am){ s.antes.push({player:am[1],amount:+am[2].replace(/,/g,'')}); if(!ante0) ante0=+am[2].replace(/,/g,''); continue; }
-    const sbm=l.match(/^(\S+?)(?::| ) posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
-    const bbm=l.match(/^(\S+?)(?::| ) posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
+    const sbm=l.match(/^(.+?):\s+posts small blind ([\d,]+)/); if(sbm){ s.smallBlind={player:sbm[1],amount:+sbm[2].replace(/,/g,'')}; continue; }
+    const bbm=l.match(/^(.+?):\s+posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
     if(l.match(/^Uncalled bet/)) continue;
     if(l.match(/doesn't show hand/)) continue;
+    if(phase!=='pre' && !inSummary){
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm){ const ph=phase||'river'; if(s.actions[ph]) s.actions[ph].push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false}); continue; }
+    }
     if(l.match(/is sitting out/)) continue;
     if(l.match(/is disconnected/)) continue;
     if(l.match(/is connected/)) continue;
@@ -931,7 +1067,7 @@ function parseHand(text){
     if(l.match(/will be allowed to play/)) continue;
     if(l.match(/out of hand/)) continue;
     if(l.match(/moved from another table/)) continue;
-    const acm=l.match(/^(\S+?)(?::| ) (folds|checks|calls|raises|bets)(.+)?/);
+    const acm=l.match(/^(.+?):\s+(folds|checks|calls|raises|bets)(.+)?/);
     if(acm&&phase!=='pre'){
       const acmPlayer=acm[1];
       let act=acm[2],amt=0;
@@ -960,7 +1096,7 @@ function parseHand888(text){
   s.header.level = '?';
   const btnM = text.match(/Seat (\d+) is the button/); s.header.button = btnM ? +btnM[1] : 1;
   for(const l of lines){
-    const sm = l.match(/^Seat (\d+):\s+(\S+)\s*\(\s*([\d,]+)\s*\)/);
+    const sm = l.match(/^Seat (\d+):\s+(.+?)\s*\(\s*([\d,]+)\s*\)/);
     if(sm) s.seats.push({seat:+sm[1], name:sm[2], chips:+sm[3].replace(/,/g,''), stack:+sm[3].replace(/,/g,''), bet:0, folded:false, allin:false, isHero:false, pos:'', bounty:0});
   }
   const n=s.seats.length, btnIdx=s.seats.findIndex(x=>x.seat===s.header.button);
@@ -1007,7 +1143,7 @@ function parseHand888(text){
       const fold=l.match(/^(\S+) folds/); if(fold){ s.actions[phase].push({player:fold[1],action:'folds',amount:0,allin:false}); continue; }
       const check=l.match(/^(\S+) checks/); if(check){ s.actions[phase].push({player:check[1],action:'checks',amount:0,allin:false}); continue; }
       const call=l.match(/^(\S+) calls \[([\d,]+)\]/); if(call){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:call[1],action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
-      const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai,raiseBy:true}); continue; }
       const bet=l.match(/^(\S+) bets \[([\d,]+)\]/); if(bet){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:bet[1],action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
       const win=l.match(/(\S+) collected \[([\d,]+)\]/); if(win){ s.actions[phase].push({player:win[1],action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
     }
@@ -1067,7 +1203,7 @@ function parseHandGG(text){
       const fold=l.match(/^(.+?): folds/); if(fold){ s.actions[phase].push({player:fold[1].trim(),action:'folds',amount:0,allin:false}); continue; }
       const check=l.match(/^(.+?): checks/); if(check){ s.actions[phase].push({player:check[1].trim(),action:'checks',amount:0,allin:false}); continue; }
       const call=l.match(/^(.+?): calls ([\d,]+)/); if(call){ const ai=l.includes('all-in'); s.actions[phase].push({player:call[1].trim(),action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
-      const raise=l.match(/^(.+?): raises [\d,]+ to ([\d,]+)/); if(raise){ const ai=l.includes('all-in'); s.actions[phase].push({player:raise[1].trim(),action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(.+?): raises [\d,]+ to ([\d,]+)/); if(raise){ const ai=l.includes('all-in'); s.actions[phase].push({player:raise[1].trim(),action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai,raiseBy:true}); continue; }
       const bet=l.match(/^(.+?): bets ([\d,]+)/); if(bet){ const ai=l.includes('all-in'); s.actions[phase].push({player:bet[1].trim(),action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
       const win=l.match(/^(.+?) collected ([\d,]+) from/); if(win){ s.actions[phase].push({player:win[1].trim(),action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
     }
@@ -1091,6 +1227,9 @@ function buildSteps(g){
       const p=seats.find(s=>s.name===a.player);
       if(p){ p.stack-=a.amount; p.bet+=a.amount; pot+=a.amount; }
     }
+    // Show hero cards during ante step
+    const hero=Object.keys(g.holeCards)[0];
+    if(hero) shown[hero]=g.holeCards[hero];
     snap('—','Ante','','preflop');
     // Reset bets after antes shown
     for(const p of seats) p.bet=0;
@@ -1118,15 +1257,15 @@ function buildSteps(g){
         pot+=a.amount; p.stack-=a.amount; p.bet+=a.amount;
       }
       else if(a.action.includes('raises')){
-        // "raises X to Y" — a.amount is the total (Y), p.bet is what they've already put in
-        const extra=a.amount-p.bet;
+        // For PS/Sisal: a.amount is the total; for 888: a.amount is the additional amount
+        const extra = a.raiseBy ? a.amount : Math.max(0, a.amount - p.bet);
         if(extra>0){pot+=extra; p.stack-=extra;}
-        p.bet=a.amount;
+        p.bet = a.raiseBy ? p.bet + a.amount : a.amount;
       }
       else if(a.action.includes('bets')){
         pot+=a.amount; p.stack-=a.amount; p.bet=a.amount;
       }
-      if(a.allin) p.allin=true;
+      if(a.allin || p.stack <= 0) p.allin=true;
       let action='',amount='';
       if(a.action.includes('calls')){action='Call';amount=a.amount;}
       else if(a.action.includes('raises')){action=a.allin?'Raise ALL-IN':'Raise';amount=a.amount;}
@@ -1147,6 +1286,23 @@ function buildSteps(g){
         continue;
       }
       snap(a.player,action,amount,ph);
+      // If at least one player is all-in and pot is closed (no one can act further),
+      // reveal all showdown cards immediately
+      const activePlayers = seats.filter(s => !s.folded);
+      const someAllin = activePlayers.some(s => s.allin || s.stack === 0);
+      if(someAllin && activePlayers.length > 1 && g.showdown && Object.keys(g.showdown).length > 0){
+        // Pot is closed when every active player has the same bet OR is all-in
+        const maxBet = Math.max(...activePlayers.map(s => s.bet));
+        const potClosed = activePlayers.every(s => s.bet === maxBet || s.allin || s.stack === 0);
+        if(potClosed){
+          for(const [name, cards] of Object.entries(g.showdown)){
+            if(cards && cards.length) shown[name] = cards;
+          }
+          // Also show hero hole cards
+          const heroName = Object.keys(g.holeCards)[0];
+          if(heroName && g.holeCards[heroName]) shown[heroName] = g.holeCards[heroName];
+        }
+      }
     }
   }
   const sdShown={...shown};
@@ -1193,8 +1349,8 @@ document.addEventListener('keydown',e=>{
   switch(e.key){
     case 'ArrowRight': e.preventDefault(); step(1); break;
     case 'ArrowLeft':  e.preventDefault(); step(-1); break;
-    case 'ArrowDown':  e.preventDefault(); selectHand(curHandIdx+1); break;
-    case 'ArrowUp':    e.preventDefault(); selectHand(curHandIdx-1); break;
+    case 'ArrowDown':  e.preventDefault(); stepHand(1); break;
+    case 'ArrowUp':    e.preventDefault(); stepHand(-1); break;
     case ' ':          e.preventDefault(); togglePlay(); break;
     case 'Escape':
       if(document.getElementById('guide-overlay').style.display==='flex') closeGuide();
@@ -1387,12 +1543,6 @@ function drawBetChip(ctx,s,pos,W,H){
 
   const d = Math.sqrt(dx*dx+dy*dy)||1;
 
-  // Keep chip at fixed absolute distance from player, not from center.
-  // chipOffset = how far from the seat toward center the chip sits (in px).
-  // Closer seats (top/bottom) have smaller d, so same t puts chip near center.
-  // Use a fixed px offset instead: chip always sits ~chipPx pixels from seat.
-  // Fixed px offset from seat: smaller for close seats, larger for far seats
-  // This keeps chips visually near the player regardless of table position
   const t = 0.40;
   let bx = x + dx*t, by = y + dy*t;
 
@@ -1439,8 +1589,6 @@ function drawBetChip(ctx,s,pos,W,H){
   hl.addColorStop(0,'rgba(255,255,255,.40)'); hl.addColorStop(1,'rgba(255,255,255,0)');
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
   ctx.fillStyle = hl; ctx.fill();
-
-  // ── ALL-IN badge drawn separately in drawAllInBadges() ──
 
   ctx.restore();
 }
@@ -1859,10 +2007,10 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   // ── 5. NAME + STACK (clipped to full text area) ──
   const textW = pw - posW - (posW ? 10 : 8);
   const textCX = plateLeft + 4 + textW/2;
-  const fsName  = Math.max(11, W*.013);
-  const fsStack = Math.max(11, W*.013);
-  const nameY  = plateTop + ph*0.30;
-  const stackY = plateTop + ph*0.72;
+  const fsName  = Math.max(9, W*.010);
+  const fsStack = Math.max(12, W*.015);
+  const nameY  = plateTop + ph*0.28;
+  const stackY = plateTop + ph*0.70;
 
   ctx.save();
   ctx.beginPath(); ctx.rect(plateLeft+3, plateTop+2, textW, ph-4); ctx.clip();
@@ -1870,7 +2018,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   // Name
   ctx.font=`700 ${fsName}px 'Segoe UI',sans-serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillStyle = s.folded?'#3a3a48' : isActive?'#fff' : '#b0c4de';
+  ctx.fillStyle = s.folded?'#3a3a48' : isActive?'#aabbcc' : '#666e7a';
   const displayName = anonMode && gs ? anonName(s.name, gs.seats) : s.name;
   ctx.fillText(displayName.length>16?displayName.slice(0,16)+'…':displayName, textCX, nameY);
 
@@ -1893,7 +2041,7 @@ function drawSeat(ctx,s,pos,W,H,seatAction,shown){
   } else {
     ctx.font=`${fsStack}px 'Courier New',monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle = s.folded ? '#606878' : '#a0b8cc';
+    ctx.fillStyle = s.folded ? '#4a4a55' : '#ffffff';
     ctx.fillText(fmtStack(s.stack), textCX, stackY);
   }
   ctx.restore();
@@ -2126,9 +2274,10 @@ let anonMode = false;
   async function loadAndDisplay(handText){
     const raw = splitHands(handText);
     if(!raw.length) return;
-    allHandsRaw = raw;
+    allHandsRaw = [];
+    allHands = [];
     for(const r of raw){
-      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length) allHands.push(_h); } catch(e){ console.warn(e); }
+      try { const _h=parseHandAuto(r); if(_h && Object.keys(_h.holeCards||{}).length){ allHands.push(_h); allHandsRaw.push(r); } } catch(e){ console.warn(e); }
     }
     if(!allHands.length) return;
     document.getElementById('input-panel').style.display='none';
