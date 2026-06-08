@@ -525,6 +525,14 @@ function parseIPokerHand(text){
 
   let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
+    if(l.startsWith('*** SHOW DOWN') || l.startsWith('*** SHOWDOWN')){ phase='showdown'; continue; }
+    if(phase==='showdown'){
+      const sdm=l.match(/^(.+?):\s+shows?\s+\[(.+?)\]/i);
+      if(sdm){ s.showdown[sdm[1]]=sdm[2].split(' '); }
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm&&s.actions.river) s.actions.river.push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false});
+      continue;
+    }
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
       s.summaryLines.push(l);
@@ -1041,6 +1049,14 @@ function parseHand(text){
   s.seats.forEach((_,i)=>{ s.seats[(btnIdx+i)%n].pos=posArr[i]||''; });
   let ante0=0, phase='pre', inSummary=false;
   for(const l of lines){
+    if(l.startsWith('*** SHOW DOWN') || l.startsWith('*** SHOWDOWN')){ phase='showdown'; continue; }
+    if(phase==='showdown'){
+      const sdm=l.match(/^(.+?):\s+shows?\s+\[(.+?)\]/i);
+      if(sdm){ s.showdown[sdm[1]]=sdm[2].split(' '); }
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm&&s.actions.river) s.actions.river.push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false});
+      continue;
+    }
     if(l.startsWith('*** SUMMARY')){ inSummary=true; continue; }
     if(inSummary){
       s.summaryLines.push(l);
@@ -1059,6 +1075,10 @@ function parseHand(text){
     const bbm=l.match(/^(.+?):\s+posts big blind ([\d,]+)/); if(bbm){ s.bigBlind={player:bbm[1],amount:+bbm[2].replace(/,/g,'')}; continue; }
     if(l.match(/^Uncalled bet/)) continue;
     if(l.match(/doesn't show hand/)) continue;
+    if(phase!=='pre' && !inSummary){
+      const colm=l.match(/^(.+?)\s+collected\s+([\d,]+)\s+from/);
+      if(colm){ const ph=phase||'river'; if(s.actions[ph]) s.actions[ph].push({player:colm[1],action:'wins',amount:+colm[2].replace(/,/g,''),allin:false}); continue; }
+    }
     if(l.match(/is sitting out/)) continue;
     if(l.match(/is disconnected/)) continue;
     if(l.match(/is connected/)) continue;
@@ -1142,7 +1162,7 @@ function parseHand888(text){
       const fold=l.match(/^(\S+) folds/); if(fold){ s.actions[phase].push({player:fold[1],action:'folds',amount:0,allin:false}); continue; }
       const check=l.match(/^(\S+) checks/); if(check){ s.actions[phase].push({player:check[1],action:'checks',amount:0,allin:false}); continue; }
       const call=l.match(/^(\S+) calls \[([\d,]+)\]/); if(call){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:call[1],action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
-      const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(\S+) raises \[([\d,]+)\]/); if(raise){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:raise[1],action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai,raiseBy:true}); continue; }
       const bet=l.match(/^(\S+) bets \[([\d,]+)\]/); if(bet){ const ai=l.includes('All-in')||l.includes('all-in'); s.actions[phase].push({player:bet[1],action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
       const win=l.match(/(\S+) collected \[([\d,]+)\]/); if(win){ s.actions[phase].push({player:win[1],action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
     }
@@ -1202,7 +1222,7 @@ function parseHandGG(text){
       const fold=l.match(/^(.+?): folds/); if(fold){ s.actions[phase].push({player:fold[1].trim(),action:'folds',amount:0,allin:false}); continue; }
       const check=l.match(/^(.+?): checks/); if(check){ s.actions[phase].push({player:check[1].trim(),action:'checks',amount:0,allin:false}); continue; }
       const call=l.match(/^(.+?): calls ([\d,]+)/); if(call){ const ai=l.includes('all-in'); s.actions[phase].push({player:call[1].trim(),action:'calls'+(ai?' all-in':''),amount:+call[2].replace(/,/g,''),allin:ai}); continue; }
-      const raise=l.match(/^(.+?): raises [\d,]+ to ([\d,]+)/); if(raise){ const ai=l.includes('all-in'); s.actions[phase].push({player:raise[1].trim(),action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai}); continue; }
+      const raise=l.match(/^(.+?): raises [\d,]+ to ([\d,]+)/); if(raise){ const ai=l.includes('all-in'); s.actions[phase].push({player:raise[1].trim(),action:'raises'+(ai?' all-in':''),amount:+raise[2].replace(/,/g,''),allin:ai,raiseBy:true}); continue; }
       const bet=l.match(/^(.+?): bets ([\d,]+)/); if(bet){ const ai=l.includes('all-in'); s.actions[phase].push({player:bet[1].trim(),action:'bets'+(ai?' all-in':''),amount:+bet[2].replace(/,/g,''),allin:ai}); continue; }
       const win=l.match(/^(.+?) collected ([\d,]+) from/); if(win){ s.actions[phase].push({player:win[1].trim(),action:'wins',amount:+win[2].replace(/,/g,'')}); continue; }
     }
@@ -1256,15 +1276,15 @@ function buildSteps(g){
         pot+=a.amount; p.stack-=a.amount; p.bet+=a.amount;
       }
       else if(a.action.includes('raises')){
-        // "raises X to Y" — a.amount is the total (Y), p.bet is what they've already put in
-        const extra=a.amount-p.bet;
+        // For PS/Sisal: a.amount is the total; for 888: a.amount is the additional amount
+        const extra = a.raiseBy ? a.amount : Math.max(0, a.amount - p.bet);
         if(extra>0){pot+=extra; p.stack-=extra;}
-        p.bet=a.amount;
+        p.bet = a.raiseBy ? p.bet + a.amount : a.amount;
       }
       else if(a.action.includes('bets')){
         pot+=a.amount; p.stack-=a.amount; p.bet=a.amount;
       }
-      if(a.allin) p.allin=true;
+      if(a.allin || p.stack <= 0) p.allin=true;
       let action='',amount='';
       if(a.action.includes('calls')){action='Call';amount=a.amount;}
       else if(a.action.includes('raises')){action=a.allin?'Raise ALL-IN':'Raise';amount=a.amount;}
