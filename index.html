@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MTT Crush — Poker Hand Replayer (Minimal)</title>
+<title>Crush The Game — Poker Hand Replayer (Minimal)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
 <style>
@@ -231,6 +231,151 @@ body {
 }
 .pos-pill:hover { border-color:var(--border); color:var(--text2); }
 .pos-pill.active { color:#0a0c10; border-color:transparent; }
+
+/* ── HAND BUILDER ──────────────────────────────────────────────── */
+#builder-overlay { display:none; position:fixed; inset:0; background:var(--bg); z-index:150; overflow-y:auto; }
+#builder-overlay.visible { display:block; }
+#builder { max-width:1040px; margin:0 auto; padding:22px 18px 20px; }
+.bld-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:22px; }
+.bld-x { background:transparent; border:none; color:var(--text2); font-size:20px; cursor:pointer; line-height:1; padding:2px 6px; }
+.bld-x:hover { color:#ffffff; }
+.bld-sec { margin-bottom:22px; }
+.bld-t {
+  font-size:10px; font-weight:700; letter-spacing:.08em; color:#444444; text-transform:uppercase;
+  margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border);
+}
+.bld-f { display:flex; flex-direction:column; gap:4px; }
+.bld-f > span { font-size:9px; letter-spacing:.5px; color:var(--text3); font-weight:700; }
+.bld-in {
+  background:#000000; border:1px solid var(--border2); border-radius:4px; color:var(--text);
+  font-size:12px; font-family:inherit; padding:6px 8px; outline:none; transition:border-color .15s; min-width:0;
+}
+.bld-in:focus { border-color:#ffffff; }
+.bld-in:disabled { color:var(--text3); background:#0a0a0a; cursor:not-allowed; }
+select.bld-in { cursor:pointer; }
+.bld-hint { font-size:10px; color:var(--text3); }
+
+/* players table */
+.bld-prow { display:grid; grid-template-columns:34px minmax(90px,1fr) 100px 34px 54px 76px; gap:8px; align-items:center; padding:5px 0; border-bottom:1px solid #131313; }
+.bld-prow.hdr { border-bottom:1px solid var(--border2); padding-bottom:6px; }
+.bld-prow.hdr span { font-size:9px; font-weight:700; letter-spacing:.5px; color:var(--text3); }
+.bld-prow input[type=radio] { accent-color:#ffffff; cursor:pointer; margin:0 auto; display:block; }
+.bld-posb { font-size:9px; font-weight:700; letter-spacing:.3px; text-align:center; border:1px solid; border-radius:3px; padding:3px 0; }
+
+/* card slots */
+.bld-card {
+  width:34px; height:46px; border-radius:4px; border:1px dashed var(--border2); background:transparent;
+  color:var(--text3); font-size:15px; font-weight:900; cursor:pointer; padding:0; line-height:1.05;
+  display:inline-flex; flex-direction:column; align-items:center; justify-content:center; transition:all .15s;
+}
+.bld-card:hover { border-color:#ffffff; color:#ffffff; }
+.bld-card.filled { border:1px solid rgba(255,255,255,.22); color:#ffffff; }
+.bld-card i { font-style:normal; font-size:9px; opacity:.85; }
+
+/* streets */
+.bld-street { border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:8px; background:var(--surface); }
+.bld-street.locked { opacity:.45; }
+.bld-sh { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.bld-sh b { font-size:11px; font-weight:700; letter-spacing:.7px; color:var(--text); }
+.bld-act { display:grid; grid-template-columns:20px 1fr 90px 80px 74px; gap:6px; align-items:center; font-size:11px; padding:4px 6px; border-radius:4px; background:var(--surface2); margin-bottom:3px; }
+.bld-act .n { color:var(--text3); font-family:monospace; font-size:10px; }
+.bld-act .amt { font-family:monospace; color:var(--text2); text-align:right; }
+.bld-mini { background:transparent; border:1px solid var(--border2); border-radius:3px; color:var(--text3); font-size:10px; cursor:pointer; padding:2px 5px; line-height:1.2; }
+.bld-mini:hover { border-color:#ffffff; color:#ffffff; }
+.bld-add { display:grid; grid-template-columns:1fr 110px 100px 100px; gap:6px; align-items:center; margin-top:8px; }
+.bld-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; position:sticky; bottom:0; padding:14px 0 10px; background:linear-gradient(to top,var(--bg) 70%,transparent); }
+
+/* overlay hitbox del builder (sopra il canvas, stessa geometria) */
+#bld-overlay { display:none; position:absolute; inset:0; z-index:2; pointer-events:none; }
+body.builder-mode #bld-overlay { display:block; }
+.bld-hit {
+  position:absolute; border-radius:9px; pointer-events:auto; cursor:pointer;
+  border:1.5px solid transparent; transition:border-color .12s, background .12s;
+}
+.bld-hit:hover { border-color:rgba(255,255,255,.5); background:rgba(255,255,255,.06); }
+/* turno atteso: bordo tratteggiato + alone, senza coprire le carte */
+.bld-hit.turn  { border-color:#ffffff; border-style:dashed; box-shadow:0 0 0 3px rgba(255,255,255,.14), 0 0 12px rgba(255,255,255,.25); }
+.bld-hit.sel   { border-color:#ffffff; border-style:solid; background:rgba(255,255,255,.12); box-shadow:0 0 0 3px rgba(255,255,255,.2); }
+.bld-hit.out   { cursor:pointer; opacity:.45; }   /* foldato o senza chip: cliccabile comunque */
+
+/* slot carta cliccabili: board e hole cards, allineati al disegno del canvas */
+.bld-slot {
+  position:absolute; pointer-events:auto; cursor:pointer; border-radius:4px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border:1.5px dashed rgba(255,255,255,.32); color:rgba(255,255,255,.45);
+  font-size:17px; font-weight:700; line-height:1.05; transition:all .12s;
+}
+.bld-slot:hover { border-color:#ffffff; color:#ffffff; background:rgba(255,255,255,.08); }
+/* carta già disegnata dal canvas: solo hitbox trasparente */
+.bld-slot.over  { border:1.5px solid transparent; color:transparent; }
+.bld-slot.over:hover { border-color:#ffffff; background:rgba(255,255,255,.07); }
+/* carta presente in gs ma non ancora disegnata (flop incompleto): anteprima */
+.bld-slot.card  { border:1.5px solid rgba(255,255,255,.22); color:#ffffff; font-weight:900; }
+.bld-slot.card i { font-style:normal; font-size:10px; opacity:.85; }
+/* slot non ancora raggiungibile (il board si riempie in ordine) */
+.bld-slot.locked { pointer-events:none; border-color:rgba(255,255,255,.08); color:transparent; }
+
+/* popup azioni */
+#bld-pop { display:none; position:absolute; z-index:3; width:224px; }
+#bld-pop.visible {
+  display:block; background:var(--surface); border:1px solid var(--border2);
+  border-radius:8px; padding:10px; box-shadow:0 12px 34px rgba(0,0,0,.8);
+}
+.bp-head { display:flex; align-items:center; gap:6px; }
+.bp-name { flex:1; min-width:0; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bp-pos  { font-size:8px; font-weight:700; letter-spacing:.3px; border:1px solid; border-radius:3px; padding:1px 4px; flex-shrink:0; }
+.bp-sub  { font-size:10px; color:var(--text2); font-family:monospace; margin:3px 0 9px; }
+.bp-lab  { font-size:9px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:5px; }
+.bp-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.bp-b {
+  padding:8px 6px; border-radius:5px; border:1px solid var(--border2); background:var(--surface2);
+  color:var(--text2); font-size:11px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .12s;
+}
+.bp-b:hover { border-color:#ffffff; color:#ffffff; }
+.bp-b.prim  { background:#ffffff; border-color:#ffffff; color:#000000; }
+.bp-b.prim:hover { opacity:.85; }
+#bp-amt { width:100%; font-size:13px; font-family:monospace; text-align:center; padding:8px; }
+.bp-eq  { font-size:10px; color:var(--text3); font-family:monospace; text-align:center; margin-top:4px; }
+
+/* barra modalità builder */
+#builder-bar { display:none; }
+body.builder-mode #builder-bar {
+  display:flex; align-items:center; gap:10px; flex-shrink:0;
+  height:34px; padding:0 14px; background:var(--surface2);
+  border-left:1px solid var(--border); border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border2);
+}
+.bb-tag { font-size:10px; font-weight:800; letter-spacing:.08em; color:#ffffff; white-space:nowrap; }
+.bb-street {
+  font-size:9px; font-weight:700; letter-spacing:.7px; color:#000000; background:#ffffff;
+  border-radius:3px; padding:2px 7px; white-space:nowrap;
+}
+.bb-info { font-size:10px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* durante la costruzione la lista mani non è selezionabile */
+body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointer-events:none; }
+
+/* card picker */
+#cp-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:220; align-items:center; justify-content:center; }
+#cp-overlay.visible { display:flex; }
+#cp { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:16px; width:min(680px,94vw); }
+.cp-grid { display:grid; grid-template-columns:repeat(13,1fr); gap:4px; }
+.cp-c {
+  aspect-ratio:.72; border-radius:3px; border:1px solid rgba(255,255,255,.12); color:#ffffff;
+  font-size:13px; font-weight:900; cursor:pointer; padding:0; line-height:1.05;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.cp-c i { font-style:normal; font-size:9px; opacity:.85; }
+.cp-c:hover { outline:2px solid #ffffff; }
+.cp-c.sel { outline:2px solid #ffffff; }
+.cp-c:disabled { opacity:.18; cursor:not-allowed; outline:none; }
+
+@media (max-width:768px){
+  .bld-prow { grid-template-columns:26px 1fr 74px 26px 44px 72px; gap:5px; }
+  .bld-act  { grid-template-columns:18px 1fr 70px 60px 66px; }
+  .bld-add  { grid-template-columns:1fr 1fr; }
+  .cp-grid  { gap:2px; }
+  .cp-c     { font-size:10px; }
+}
 </style>
 </head>
 <body>
@@ -257,7 +402,10 @@ body {
     </label>
     <div class="input-footer">
       <span class="input-hint">Supporta una o più mani — tornei e cash game</span>
-      <button class="btn-primary" onclick="loadFromInput()">CARICA ▶</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn-ghost" style="padding:10px 18px;font-size:13px;font-weight:700;" onclick="openBuilder()">✏️ Crea mano</button>
+        <button class="btn-primary" onclick="loadFromInput()">CARICA ▶</button>
+      </div>
     </div>
   </div>
 
@@ -273,6 +421,7 @@ body {
       <div id="hand-list"></div>
       <div id="sidebar-add">
         <button onclick="openModal()">+ Aggiungi mani</button>
+        <button onclick="openBuilder()" style="margin-top:6px;">✏️ Crea mano</button>
         <button onclick="clearHands()" style="margin-top:6px;border-color:rgba(220,50,50,.4);color:#e06060;">🗑 Cancella mani</button>
       </div>
     </div>
@@ -292,7 +441,21 @@ body {
         </div>
         <button onclick="openGuide()" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#c49010,#f0c030);color:#0a0c10;border:none;font-size:16px;font-weight:900;cursor:pointer;font-family:Georgia,serif;line-height:1;">?</button>
       </div>
-      <div id="canvas-wrap"><canvas id="tc"></canvas></div>
+      <!-- BARRA MODALITÀ BUILDER (visibile solo durante la costruzione) -->
+      <div id="builder-bar">
+        <span class="bb-tag">● BUILDER</span>
+        <span class="bb-street" id="bb-street">PREFLOP</span>
+        <span class="bb-info" id="bb-info">Clicca un player per inserire un'azione</span>
+        <div style="flex:1"></div>
+        <button class="btn-ghost" onclick="bExitBuilder()">✕ Esci</button>
+      </div>
+      <div id="canvas-wrap">
+        <canvas id="tc"></canvas>
+        <!-- hitbox interattive del builder, allineate al disegno del canvas -->
+        <div id="bld-overlay"></div>
+        <!-- popup fluttuante per inserire l'azione del player cliccato -->
+        <div id="bld-pop"></div>
+      </div>
       <div id="bottom-panel">
         <div id="phases">
           <div class="pill" id="ph-preflop" onclick="jumpToPhase('preflop')">PREFLOP</div>
@@ -337,6 +500,81 @@ body {
       <div class="modal-footer">
         <button class="btn-ghost" onclick="closeModal()">Annulla</button>
         <button class="btn-primary" onclick="addHandsFromModal()">Aggiungi ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HAND BUILDER — costruzione manuale di una mano -->
+  <div id="builder-overlay">
+    <div id="builder">
+
+      <div class="bld-head">
+        <div class="logo-row" style="margin-bottom:0">
+          <div class="logo-badge">✏</div>
+          <div>
+            <div class="logo-title">Crea mano</div>
+            <div class="logo-sub">Costruisci una mano a mano e visualizzala nel replayer</div>
+          </div>
+        </div>
+        <button class="bld-x" onclick="closeBuilder()" title="Chiudi">✕</button>
+      </div>
+
+      <!-- SETUP TAVOLO -->
+      <div class="bld-sec">
+        <p class="bld-t">Tavolo</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;">
+          <label class="bld-f"><span>PLAYER</span>
+            <select id="bld-n" class="bld-in" onchange="bSetN(+this.value)"></select></label>
+          <label class="bld-f"><span>SMALL BLIND</span>
+            <input id="bld-sb" class="bld-in" type="number" min="0" step="1" style="width:110px" oninput="bSetField('sb',this.value)"></label>
+          <label class="bld-f"><span>BIG BLIND</span>
+            <input id="bld-bb" class="bld-in" type="number" min="0" step="1" style="width:110px" oninput="bSetField('bb',this.value)"></label>
+          <label class="bld-f"><span>ANTE</span>
+            <input id="bld-ante" class="bld-in" type="number" min="0" step="1" style="width:110px" oninput="bSetField('ante',this.value)"></label>
+          <label class="bld-f"><span>ANTE PAGATO DA</span>
+            <select id="bld-ante-mode" class="bld-in" onchange="bSetAnteMode(this.value)">
+              <option value="all">Tutti i player</option>
+              <option value="bb">Solo BB</option>
+            </select></label>
+        </div>
+      </div>
+
+      <!-- PLAYER -->
+      <div class="bld-sec">
+        <p class="bld-t">Player</p>
+        <div class="bld-prow hdr">
+          <span style="text-align:center">HERO</span><span>NOME</span><span>STACK</span>
+          <span style="text-align:center">BTN</span><span style="text-align:center">POS</span><span>CARTE</span>
+        </div>
+        <div id="bld-players"></div>
+      </div>
+
+      <p class="bld-hint" style="margin-top:-8px">
+        Board e azioni si costruiscono direttamente sul tavolo, nella fase successiva.
+      </p>
+
+      <div class="bld-foot">
+        <button class="btn-ghost" onclick="bResetBuilder()">↺ Azzera</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-ghost" onclick="closeBuilder()">Annulla</button>
+          <button class="btn-primary" onclick="bGoToTable()">▶ Vai al tavolo</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CARD PICKER — riutilizzabile per hole cards e board -->
+  <div id="cp-overlay">
+    <div id="cp">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="font-size:13px;font-weight:700;color:#fff;" id="cp-title">Scegli una carta</span>
+        <button class="bld-x" onclick="closeCardPicker()" title="Chiudi">✕</button>
+      </div>
+      <div class="cp-grid" id="cp-grid"></div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="cp-clear" onclick="bClearCard()">Rimuovi carta</button>
+        <button class="btn-ghost" onclick="closeCardPicker()">Annulla</button>
       </div>
     </div>
   </div>
@@ -834,6 +1072,7 @@ function closeModal(){ document.getElementById('modal-overlay').className=''; }
 function openGuide(){ document.getElementById('guide-overlay').style.display='flex'; }
 function closeGuide(){ document.getElementById('guide-overlay').style.display='none'; }
 function clearHands(){
+  if(builderMode){ alert('Esci prima dalla modalità builder.'); return; }
   if(!allHands.length) return;
   if(!confirm(`Cancellare tutte le ${allHands.length} mani caricate?`)) return;
   if(timer){clearInterval(timer);timer=null;document.getElementById('play-btn').textContent='▶';}
@@ -964,6 +1203,7 @@ function filteredIndices(){
 
 // Navigate to prev/next hand within filtered list
 function stepHand(dir){
+  if(builderMode) return;   // in costruzione non si cambia mano
   const fi = filteredIndices();
   if(!fi.length) return;
   const cur = fi.indexOf(curHandIdx);
@@ -975,6 +1215,7 @@ function stepHand(dir){
 
 function selectHand(idx){
   if(idx<0||idx>=allHands.length) return;
+  if(builderMode) return;   // una mano è in costruzione: non sovrascrivere gs
   if(timer){clearInterval(timer);timer=null;document.getElementById('play-btn').textContent='▶';}
   curHandIdx=idx;
   gs=allHands[idx];
@@ -1363,6 +1604,8 @@ function togglePlay(){
 document.addEventListener('keydown',e=>{
   if(document.getElementById('replayer').className!=='visible') return;
   if(document.getElementById('modal-overlay').className==='visible') return;
+  // il builder può essere aperto sopra al replayer: non rubargli i tasti
+  if(document.getElementById('builder-overlay').className==='visible') return;
   // Don't steal from text inputs
   if(['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
   switch(e.key){
@@ -2274,6 +2517,809 @@ let anonMode = false;
     } catch(e){ console.warn('Errore caricamento mano condivisa:', e); }
   })();
 })();
+
+// ════════════════════════════════════════════════════════════════
+// HAND BUILDER — costruzione manuale di una mano, in due fasi:
+//   FASE 1  modal di setup statico (player, blinds, ante, hole cards)
+//   FASE 2  tavolo interattivo: azioni e board si inseriscono sul canvas
+// Produce lo stesso oggetto `gs` dei parser (parseHand & co.), così
+// buildSteps / renderCanvas funzionano senza alcuna modifica.
+// ════════════════════════════════════════════════════════════════
+
+const BLD_RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+const BLD_SUITS = ['s','h','d','c'];
+// POS_LABELS_BY_N non copre il 10-handed (i parser lasciano un seat senza pos):
+// etichette locali usate SOLO dal builder, nessun impatto sui parser.
+const BLD_POS_10 = ['BTN','SB','BB','UTG','UTG+1','UTG+2','MP','MP+1','HJ','CO'];
+const BLD_STREETS = [['preflop','PREFLOP'],['flop','FLOP'],['turn','TURN'],['river','RIVER']];
+const BLD_NEED = { preflop:0, flop:3, turn:4, river:5 };   // carte board richieste da ogni street
+const BLD_ACT_LABEL = { fold:'Fold', check:'Check', call:'Call', bet:'Bet', raise:'Raise', allin:'All-in' };
+const BLD_ACT_COLOR = { fold:'#606070', check:'#8898aa', call:'#3a8fe0', bet:'#e07830', raise:'#e07830', allin:'#ff4444' };
+
+let B = null;                // stato del setup (fase 1)
+let bCardTarget = null;      // slot carta in attesa di selezione dal picker
+let builderMode = false;     // true = il tavolo è in costruzione (fase 2)
+
+// ── STATO SETUP (fase 1) ────────────────────────────────────────
+function bDefaultState(n){
+  const players = [];
+  for(let i=0;i<n;i++) players.push({ seat:i+1, name:'Player '+(i+1), stack:10000, cards:[null,null] });
+  return { n, btnSeat:1, heroSeat:1, sb:100, bb:200, ante:0, anteMode:'all', players };
+}
+
+function openBuilder(){
+  // se una costruzione è già in corso, va abbandonata prima di ripartire dal setup
+  if(builderMode){
+    if(!confirm('Una mano è già in costruzione sul tavolo. Ricominciare dal setup? La mano in corso andrà persa.')) return;
+    bLeaveBuilderMode();
+  }
+  if(!B) B = bDefaultState(6);
+  document.getElementById('builder-overlay').className='visible';
+  renderBuilder();
+}
+function closeBuilder(){ document.getElementById('builder-overlay').className=''; }
+function bResetBuilder(){
+  if(!confirm('Azzerare la mano in costruzione?')) return;
+  B = bDefaultState(B ? B.n : 6);
+  renderBuilder();
+}
+
+function bEsc(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function bName(i){
+  const p = B.players[i];
+  return (p && p.name.trim()) || ('Player '+(i+1));
+}
+// Nomi univoci: seats.find(s=>s.name===...) in buildSteps richiede nomi distinti
+function bUniqueNames(){
+  const seen = {}, out = [];
+  B.players.forEach((p,i)=>{
+    const base = bName(i);
+    if(seen[base]){ seen[base]++; out.push(base+' ('+seen[base]+')'); }
+    else { seen[base]=1; out.push(base); }
+  });
+  return out;
+}
+
+// ── POSIZIONI / BLINDS ──────────────────────────────────────────
+// Stessa logica dei parser: dal BTN in avanti seguendo l'ordine dei seat.
+function bPositions(){
+  const n = B.n;
+  const posArr = n===10 ? BLD_POS_10 : (POS_LABELS_BY_N[n] || POS_LABELS_BY_N[9]);
+  const btnIdx = Math.max(0, B.players.findIndex(p=>p.seat===B.btnSeat));
+  const out = new Array(n).fill('');
+  for(let i=0;i<n;i++) out[(btnIdx+i)%n] = posArr[i] || '';
+  return out;
+}
+function bIdxOfPos(p){ return bPositions().indexOf(p); }
+// heads-up: POS_LABELS_BY_N[2] = ['BTN','BB'] → il BTN è lo small blind
+function bSbIdx(){ return B.n===2 ? bIdxOfPos('BTN') : bIdxOfPos('SB'); }
+function bBbIdx(){ return bIdxOfPos('BB'); }
+
+// Parti statiche della mano (ante e blinds), derivate dal setup.
+// Le azioni NON sono qui: nella fase 2 vivono direttamente in gs.actions.
+function bStaticParts(){
+  const names = bUniqueNames();
+  const antes = [];
+  const ante = Math.max(0, Math.round(+B.ante||0));
+  if(ante>0){
+    if(B.anteMode==='bb'){ const i=bBbIdx(); if(i>=0) antes.push({player:names[i],amount:ante}); }
+    else names.forEach(nm=>antes.push({player:nm,amount:ante}));
+  }
+  const sbV = Math.max(0,Math.round(+B.sb||0)), bbV = Math.max(0,Math.round(+B.bb||0));
+  const sbI = bSbIdx(), bbI = bBbIdx();
+  return {
+    names, antes,
+    smallBlind: (sbI>=0 && sbV>0) ? {player:names[sbI], amount:sbV} : null,
+    bigBlind:   (bbI>=0 && bbV>0) ? {player:names[bbI], amount:bbV} : null
+  };
+}
+
+// ── gs INIZIALE (fine fase 1) ───────────────────────────────────
+// Solo seats, blinds, ante e hole cards: nessuna azione, board vuoto.
+// Da qui in poi l'oggetto viene arricchito direttamente sul tavolo.
+function bInitialGs(){
+  const c   = bStaticParts();
+  const pos = bPositions();
+  const g = { header:{}, seats:[], antes:[], actions:{preflop:[],flop:[],turn:[],river:[]},
+              board:[], holeCards:{}, showdown:{}, summaryLines:[] };
+
+  g.header = {
+    handId: String(Date.now()).slice(-9),
+    level:  '1',
+    sb: Math.max(0,Math.round(+B.sb||0)),
+    bb: Math.max(0,Math.round(+B.bb||0)),
+    ante: Math.max(0,Math.round(+B.ante||0)),
+    room: 'Manuale',
+    mode: 'Normal',
+    button: B.btnSeat
+  };
+
+  g.seats = B.players.map((p,i)=>{
+    const chips = Math.max(0,Math.round(+p.stack||0));
+    return { seat:p.seat, name:c.names[i], chips, stack:chips, bet:0, folded:false, allin:false,
+             isHero:p.seat===B.heroSeat, pos:pos[i]||'', bounty:0 };
+  });
+
+  g.antes = c.antes;
+  if(c.smallBlind) g.smallBlind = c.smallBlind;
+  if(c.bigBlind)   g.bigBlind   = c.bigBlind;
+
+  // buildSteps e renderSidebar usano Object.keys(holeCards)[0] come hero
+  // → in holeCards va SOLO l'hero; le carte degli avversari vanno in showdown.
+  // Anche una sola carta scelta viene registrata, così resta visibile sul tavolo.
+  const heroIdx = B.players.findIndex(p=>p.seat===B.heroSeat);
+  if(heroIdx>=0){
+    const hc = B.players[heroIdx].cards.filter(Boolean);
+    if(hc.length) g.holeCards[c.names[heroIdx]] = hc;
+  }
+  B.players.forEach((p,i)=>{
+    const cds = p.cards.filter(Boolean);
+    if(cds.length) g.showdown[c.names[i]] = cds;
+  });
+
+  return g;   // actions vuote, board vuoto: si riempiono nella fase 2
+}
+
+// Street corrente = quante carte ci sono sul board
+function bStreetOf(boardLen){ return boardLen>=5?'river' : boardLen>=4?'turn' : boardLen>=3?'flop' : 'preflop'; }
+function bCurStreet(){ return bStreetOf(gs && gs.board ? gs.board.length : 0); }
+
+// ── EXPORT TESTUALE (allHandsRaw) ───────────────────────────────
+// Genera un testo in formato PokerStars così che 🔗 condividi e 📋 copia
+// restino funzionanti: il testo è ri-parsabile da parseHand.
+// Gli spazi nei nomi vengono sostituiti con "_" perché la regex degli ante
+// del parser accetta solo nomi senza spazi.
+function bExportText(g){
+  const nm = s => String(s).replace(/\s+/g,'_');
+  const L = [];
+  L.push(`PokerStars Hand #${g.header.handId}:  Hold'em No Limit - Level I (${g.header.sb}/${g.header.bb}) - 2024/01/01 00:00:00 CET`);
+  L.push(`Table 'Builder' ${g.seats.length}-max Seat #${g.header.button} is the button`);
+  g.seats.forEach(s=>L.push(`Seat ${s.seat}: ${nm(s.name)} (${s.chips} in chips)`));
+  g.antes.forEach(a=>L.push(`${nm(a.player)}: posts the ante ${a.amount}`));
+  if(g.smallBlind) L.push(`${nm(g.smallBlind.player)}: posts small blind ${g.smallBlind.amount}`);
+  if(g.bigBlind)   L.push(`${nm(g.bigBlind.player)}: posts big blind ${g.bigBlind.amount}`);
+  L.push('*** HOLE CARDS ***');
+  // solo mani complete: una carta singola renderebbe il testo non ri-parsabile
+  for(const [p,cs] of Object.entries(g.holeCards)) if(cs.length===2) L.push(`Dealt to ${nm(p)} [${cs.join(' ')}]`);
+
+  const bets = {};   // bet corrente per street, serve a scrivere "raises X to Y"
+  if(g.smallBlind) bets[g.smallBlind.player] = g.smallBlind.amount;
+  if(g.bigBlind)   bets[g.bigBlind.player]   = g.bigBlind.amount;
+  const emit = k => {
+    for(const a of (g.actions[k]||[])){
+      if(a.action==='wins'){ L.push(`${nm(a.player)} collected ${a.amount} from pot`); continue; }
+      const cur = bets[a.player] || 0;
+      const ai  = a.allin ? ' and is all-in' : '';
+      if(a.action.startsWith('folds'))       L.push(`${nm(a.player)}: folds`);
+      else if(a.action.startsWith('checks')) L.push(`${nm(a.player)}: checks`);
+      else if(a.action.startsWith('calls'))  { L.push(`${nm(a.player)}: calls ${a.amount}${ai}`); bets[a.player]=cur+a.amount; }
+      else if(a.action.startsWith('bets'))   { L.push(`${nm(a.player)}: bets ${a.amount}${ai}`);  bets[a.player]=a.amount; }
+      else { L.push(`${nm(a.player)}: raises ${Math.max(0,a.amount-cur)} to ${a.amount}${ai}`); bets[a.player]=a.amount; }
+    }
+  };
+  const bd = g.board, reset = () => Object.keys(bets).forEach(x=>bets[x]=0);
+  emit('preflop');
+  if(bd.length>=3){ reset(); L.push(`*** FLOP *** [${bd.slice(0,3).join(' ')}]`); emit('flop'); }
+  if(bd.length>=4){ reset(); L.push(`*** TURN *** [${bd.slice(0,3).join(' ')}] [${bd[3]}]`); emit('turn'); }
+  if(bd.length>=5){ reset(); L.push(`*** RIVER *** [${bd.slice(0,4).join(' ')}] [${bd[4]}]`); emit('river'); }
+
+  const sd = Object.entries(g.showdown||{}).filter(([,cs])=>cs.length===2);
+  if(sd.length){
+    L.push('*** SHOW DOWN ***');
+    sd.forEach(([p,cs])=>L.push(`${nm(p)}: shows [${cs.join(' ')}]`));
+  }
+  L.push('*** SUMMARY ***');
+  g.summaryLines.forEach(l=>{
+    let out = l;   // sostituisce solo i nomi, non tutta la riga
+    g.seats.forEach(s=>{ out = out.split(s.name).join(nm(s.name)); });
+    L.push(out);
+  });
+  return L.join('\n');
+}
+
+// ════════════════════════════════════════════════════════════════
+// FASE 2 — MODALITÀ BUILDER SUL TAVOLO
+// ════════════════════════════════════════════════════════════════
+
+// Fine fase 1: genera il gs iniziale e apre il tavolo in costruzione.
+function bGoToTable(){
+  if(!B) return;
+  if(B.players.some(p=>!(Math.round(+p.stack||0)>0))
+     && !confirm('Almeno un player ha stack 0. Continuare comunque?')) return;
+  gs = bInitialGs();
+  builderMode = true;
+  curHandIdx = -1;                    // la mano in costruzione non è ancora in allHands
+  if(timer){ clearInterval(timer); timer=null; document.getElementById('play-btn').textContent='▶'; }
+  closeBuilder();
+  document.body.classList.add('builder-mode');
+  document.getElementById('input-panel').style.display='none';
+  document.getElementById('replayer').className='visible';
+  renderSidebar();
+  bRenderMeta();
+  cur = 0;
+  bRefreshSteps(true);
+}
+
+// Ricostruisce gli step dal gs corrente. È l'unico punto da cui passano
+// tutte le modifiche della fase 2: azioni, board, hole cards.
+function bRefreshSteps(goLast){
+  steps = buildSteps(gs);
+  if(builderMode){
+    // L'ultimo step "Showdown" (aggiunto sempre da buildSteps) non corrisponde
+    // a nulla di inserito: va tolto, così steps.length cresce solo quando
+    // l'utente aggiunge davvero un'azione o una carta.
+    if(steps.length>1) steps.pop();
+    // In costruzione le carte impostate sono visibili per TUTTI i player, non
+    // solo per l'hero: arricchiamo lo `shown` di ogni step senza toccare
+    // buildSteps né renderCanvas (che leggono/scrivono la stessa struttura).
+    const allCards = { ...(gs.showdown||{}), ...(gs.holeCards||{}) };
+    steps.forEach(st => { st.shown = { ...st.shown, ...allCards }; });
+  }
+  const sl = document.getElementById('step-slider');
+  sl.max = Math.max(0, steps.length-1);
+  goToStep(goLast ? steps.length-1 : Math.min(cur, steps.length-1));
+  bLayoutOverlay();
+  bUpdateBuilderBar();
+}
+
+// Barra di stato della modalità builder
+function bUpdateBuilderBar(){
+  if(!builderMode) return;
+  const st = bCurStreet();
+  document.getElementById('bb-street').textContent = (BLD_STREETS.find(s=>s[0]===st)||['','?'])[1];
+  const nAct = BLD_STREETS.reduce((t,[k])=>t+((gs.actions[k]||[]).length),0);
+  const turn = bExpectedSeatIdx();
+  const parts = [ nAct===0 ? 'Nessuna azione inserita' : nAct+(nAct===1?' azione inserita':' azioni inserite') ];
+  if(turn>=0) parts.push('tocca a ' + gs.seats[turn].name);
+  else if(nAct>0 && bRoundClosed()) parts.push('giro completo');
+  if(bSelSeat>=0) parts.push('selezionato: ' + gs.seats[bSelSeat].name);
+  document.getElementById('bb-info').textContent = parts.join(' · ');
+}
+
+// ── HITBOX SUL TAVOLO ───────────────────────────────────────────
+let bSelSeat = -1;    // seat selezionato (ancora del popup azioni, fase 3)
+
+// Stato "di frontiera": l'ultimo step è lo stato dopo l'ultima azione inserita.
+// È l'oracolo per foldati/all-in/bet correnti — coincide sempre con ciò che
+// il tavolo mostra, perché è l'output di buildSteps stesso.
+function bFrontierSeats(){
+  return steps.length ? steps[steps.length-1].seats : (gs ? gs.seats : []);
+}
+
+// Il giro di puntate dello street è concluso? Serve solo a smettere di
+// proporre il player successivo: non impedisce nulla, ogni seat resta cliccabile.
+function bRoundClosed(){
+  if(!gs) return false;
+  const acts = gs.actions[bCurStreet()] || [];
+  if(!acts.length) return false;                       // street appena iniziato
+  const seats = bFrontierSeats();
+  const live  = seats.filter(s => !s.folded);
+  if(live.length <= 1) return true;                    // è rimasto un solo player
+  const canAct = live.filter(s => !s.allin && s.stack > 0);
+  if(!canAct.length) return true;                      // sono tutti all-in
+  const maxBet = Math.max(...live.map(s => s.bet));
+  const acted  = new Set(acts.map(a => a.player));
+  // chiuso quando tutti quelli che possono ancora agire hanno parlato e pareggiato
+  // (così il BB mantiene la sua opzione quando il giro è solo limpato)
+  return canAct.every(s => acted.has(s.name) && s.bet === maxBet);
+}
+
+// Prossimo player atteso in senso orario. È solo un suggerimento visivo:
+// l'utente resta libero di cliccare qualsiasi player in qualsiasi ordine.
+function bExpectedSeatIdx(){
+  if(!gs || !gs.seats.length) return -1;
+  if(bRoundClosed()) return -1;
+  const seats = bFrontierSeats(), n = seats.length;
+  const acts  = gs.actions[bCurStreet()] || [];
+  const canAct = i => !seats[i].folded && !seats[i].allin && seats[i].stack > 0;
+
+  let start;
+  if(acts.length){                       // subito dopo chi ha appena agito
+    const li = seats.findIndex(s => s.name === acts[acts.length-1].player);
+    if(li < 0) return -1;
+    start = li + 1;
+  } else if(bCurStreet()==='preflop'){    // primo di parola preflop: dopo il BB
+    const bb = seats.findIndex(s => s.pos==='BB');
+    start = (bb<0 ? 0 : bb+1);
+  } else {                                // postflop: primo dopo il bottone
+    const btn = seats.findIndex(s => s.pos==='BTN');
+    start = (btn<0 ? 0 : btn+1);
+  }
+  for(let k=0;k<n;k++){ const i=(start+k)%n; if(canAct(i)) return i; }
+  return -1;
+}
+
+// Disegna le hitbox usando ESATTAMENTE la geometria di renderCanvas
+// (seatPositions + seatBlockMetrics), così restano allineate al canvas.
+function bLayoutOverlay(){
+  const ov = document.getElementById('bld-overlay');
+  if(!ov) return;
+  if(!builderMode || !gs){ ov.innerHTML=''; return; }
+
+  const wrap = document.getElementById('canvas-wrap');
+  const W = wrap.clientWidth||640, H = wrap.clientHeight||416;
+  const pos = seatPositions(gs.seats, W, H);
+  const m   = seatBlockMetrics(W, H);
+  const seats = bFrontierSeats();
+  const turn  = bExpectedSeatIdx();
+
+  let html = '';
+  gs.seats.forEach((s,i)=>{
+    const { x, y } = pos[i];
+    // il blocco seat va da y-blockH/2 (carte) a y+blockH/2 (fondo nameplate):
+    // la hitbox delle azioni copre il solo nameplate, sopra ci sono le carte
+    const top  = y + m.blockH/2 - m.ph;
+    const left = x - m.pw/2;
+    const fs   = seats[i] || s;
+    const cls  = ['bld-hit'];
+    if(i===turn)     cls.push('turn');
+    if(i===bSelSeat) cls.push('sel');
+    if(fs.folded || fs.stack<=0) cls.push('out');
+    html += `<div class="${cls.join(' ')}" style="left:${left}px;top:${top}px;width:${m.pw}px;height:${m.ph}px"
+      onclick="bSeatClick(${i})" title="${bEsc(s.name)} — azione"></div>`;
+
+    // hole cards: stessa geometria di drawSeat (centro carta k in x ± cw/2)
+    const cardTop = y - m.blockH/2;
+    const cds = bSeatCards(i);
+    [0,1].forEach(k=>{
+      const l = (k===0 ? x - m.cw : x);
+      html += bSlotHtml('over', l, cardTop, m.cw, m.ch,
+        `bHoleClick(${i},${k})`, '', '',
+        (cds[k] ? 'Cambia ' : 'Assegna ') + 'carta di ' + bEsc(s.name));
+    });
+  });
+
+  // ── BOARD ──
+  // Gli slot si mostrano solo sull'ultimo step: sugli step precedenti il canvas
+  // disegna un board diverso e le anteprime risulterebbero fuori posto.
+  if(cur === steps.length-1){
+    const g = bBoardGeom(W,H);
+    const drawn = (steps[cur] && steps[cur].board) ? steps[cur].board.length : 0;
+    for(let i=0;i<5;i++){
+      const l = g.sx + i*(g.cw + g.gap);
+      const c = gs.board[i] || null;
+      const label = i<3 ? 'Flop' : i===3 ? 'Turn' : 'River';
+      if(i < drawn){
+        // già disegnata dal canvas: solo hitbox per cambiarla/rimuoverla
+        html += bSlotHtml('over', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '', '', label+' — cambia carta');
+      } else if(c){
+        // presente in gs ma non ancora disegnata (flop incompleto): anteprima
+        const f = bCardFace(c);
+        html += bSlotHtml('card', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, f.html, f.bg, label+' — cambia carta');
+      } else if(i === gs.board.length){
+        html += bSlotHtml('', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '+', '', label+' — scegli carta');
+      } else {
+        html += bSlotHtml('locked', l, g.by, g.cw, g.ch, '', '', '', '');
+      }
+    }
+  }
+  ov.innerHTML = html;
+}
+
+// Geometria del board, identica a drawBoard
+function bBoardGeom(W,H){
+  const cw = Math.max(40, W*.062), ch = cw*1.37, gap = 5;
+  const total = 5*(cw+gap) - gap;
+  return { cw, ch, gap, by: H/2 - ch/2 + H*.01, sx: W/2 - total/2 };
+}
+// Carte di un seat: showdown è la fonte (per l'hero viene tenuto allineato a holeCards)
+function bSeatCards(i){
+  const nm = gs.seats[i].name;
+  return gs.showdown[nm] || gs.holeCards[nm] || [];
+}
+function bCardFace(c){
+  const suit = c.slice(-1), rank = RANK[c.slice(0,-1)] || c.slice(0,-1);
+  return { bg: SUIT_BG[suit] || '#333333', html: `${rank}<i>${SYM[suit]||''}</i>` };
+}
+function bSlotHtml(cls, l, t, w, h, onclick, inner, bg, title){
+  return `<div class="bld-slot${cls?' '+cls:''}"
+    style="left:${l}px;top:${t}px;width:${w}px;height:${h}px${bg?';background:'+bg:''}"
+    ${onclick?`onclick="${onclick}"`:''}${title?` title="${title}"`:''}>${inner||''}</div>`;
+}
+
+// ── CLICK SU BOARD E HOLE CARDS ─────────────────────────────────
+function bBoardClick(i){
+  bClosePop();
+  const label = i<3 ? 'Flop' : i===3 ? 'Turn' : 'River';
+  openCardPicker('tboard', i, 0, label + ' — carta ' + (i+1));
+}
+function bHoleClick(i,k){
+  bClosePop();
+  // si riempie sempre in ordine: cliccando la seconda carta con la prima vuota
+  // si assegna comunque la prima (gs non può contenere buchi)
+  const idx = Math.min(k, bSeatCards(i).length);
+  openCardPicker('thole', i, idx, gs.seats[i].name + ' — carta ' + (idx+1));
+}
+
+function bSetBoardCard(i, card){
+  if(card){
+    if(i > gs.board.length) return;          // il board non può avere buchi
+    gs.board[i] = card;
+  } else {
+    // rimozione: il board deve restare contiguo, quindi si tronca da i in poi.
+    // Le azioni degli street che spariscono vanno rimosse, altrimenti buildSteps
+    // le eseguirebbe comunque (itera sempre tutti e quattro gli street).
+    const orfane = BLD_STREETS.filter(([k]) => BLD_NEED[k] > i && (gs.actions[k]||[]).length);
+    if(orfane.length && !confirm(
+        'Rimuovendo questa carta si perdono anche le azioni di '
+        + orfane.map(([,l])=>l).join(', ') + '. Continuare?')) return;
+    gs.board = gs.board.slice(0, i);
+    orfane.forEach(([k])=>{ gs.actions[k] = []; });
+  }
+  bRefreshSteps(true);
+}
+
+function bSetSeatCard(i, k, card){
+  const s = gs.seats[i], nm = s.name;
+  const cds = bSeatCards(i).slice();
+  if(card) cds[Math.min(k, cds.length)] = card;
+  else     cds.splice(k, 1);
+  if(cds.length) gs.showdown[nm] = cds; else delete gs.showdown[nm];
+  // in holeCards va SOLO l'hero: buildSteps usa Object.keys(holeCards)[0]
+  if(s.isHero){
+    if(cds.length) gs.holeCards[nm] = cds.slice(); else delete gs.holeCards[nm];
+  }
+  bRefreshSteps(false);   // non cambia il numero di step: resta dove sei
+}
+
+function bSeatClick(i){
+  if(bPop.open && bPop.seat===i){ bClosePop(); return; }   // ri-click = chiudi
+  // si costruisce sempre in coda: se stavi rivedendo uno step precedente,
+  // riporta il tavolo allo stato reale prima di scegliere l'azione
+  if(cur !== steps.length-1) goToStep(steps.length-1);
+  bSelSeat = i;
+  bPop = { open:true, seat:i, mode:null, amount:0 };
+  bLayoutOverlay();
+  bRenderPop();
+  bUpdateBuilderBar();
+}
+
+// ── POPUP AZIONI ────────────────────────────────────────────────
+let bPop = { open:false, seat:-1, mode:null, amount:0 };
+
+// Size proposta (sempre modificabile): nessun vincolo di poker, solo comodità.
+function bDefaultAmount(i, type){
+  const seats = bFrontierSeats(), p = seats[i];
+  if(!p) return 0;
+  const maxBet = Math.max(...seats.map(s=>s.bet));
+  const pot    = steps.length ? steps[steps.length-1].pot : 0;
+  const bb     = Math.round(+gs.header.bb||0);
+  if(type==='call')  return Math.min(Math.max(0, maxBet-p.bet), p.stack);
+  if(type==='allin') return p.bet + p.stack;
+  if(type==='bet')   return Math.min(p.stack, Math.max(bb||1, Math.round(pot/2)));
+  if(type==='raise') return Math.min(p.bet+p.stack, Math.max(Math.round(maxBet*2.5), bb*2));
+  return 0;
+}
+
+// ── UNITÀ DEL CAMPO SIZE ────────────────────────────────────────
+// Il campo segue la modalità di visualizzazione del tavolo: BB se il toggle
+// è su BB (e il big blind è valorizzato), altrimenti chips. Internamente
+// gli importi restano SEMPRE in chips, come richiede gs.
+function bSizeUnit(){ return (stackMode==='bb' && +gs.header.bb>0) ? 'bb' : 'chips'; }
+function bToInput(chips){
+  if(bSizeUnit()==='chips') return Math.round(chips);
+  return Math.round((chips / +gs.header.bb) * 100) / 100;   // max 2 decimali
+}
+function bFromInput(v){
+  const n = Math.max(0, +v || 0);
+  return bSizeUnit()==='chips' ? Math.round(n) : Math.round(n * +gs.header.bb);
+}
+
+// Traduce la scelta dell'utente in un'azione formato gs, con la stessa
+// matematica di buildSteps: calls = importo aggiuntivo, bets/raises = totale
+// sullo street. Lo stato di partenza è la frontiera (ultimo step).
+function bMakeAction(i, type, amount){
+  const seats = bFrontierSeats(), p = seats[i];
+  const maxBet = Math.max(...seats.map(s=>s.bet));
+  let t = type, amt = Math.max(0, Math.round(+amount||0)), forcedAI = false;
+
+  if(t==='allin'){ amt = p.bet + p.stack; t = maxBet>0 ? 'raise' : 'bet'; forcedAI = true; }
+  // con chip già davanti, "bets" avrebbe matematica errata in buildSteps
+  // (p.bet = amount, non += ): si usa la semantica raise, che è un totale.
+  if(t==='bet' && p.bet>0) t = 'raise';
+
+  if(t==='call' || t==='bet') amt = Math.min(amt, p.stack);
+  else if(t==='raise')        amt = Math.min(Math.max(amt, p.bet), p.bet + p.stack);
+
+  const cost = (t==='raise') ? Math.max(0, amt-p.bet) : amt;
+  const ai   = forcedAI || (cost>0 && cost>=p.stack);
+
+  let action;
+  if(t==='fold')       action = 'folds';
+  else if(t==='check') action = 'checks';
+  else action = (t==='call'?'calls' : t==='bet'?'bets' : 'raises') + (ai?' all-in':'');
+  return { player:p.name, action, amount:(t==='fold'||t==='check')?0:amt, allin:ai };
+}
+
+// Inserisce l'azione nello street corrente e aggiorna il tavolo
+function bAddAction(i, type, amount){
+  gs.actions[bCurStreet()].push(bMakeAction(i, type, amount));
+  bClosePop();
+  bRefreshSteps(true);
+  // Acceleratore: apre subito il popup del player successivo atteso.
+  // Non toglie libertà — qualsiasi altro seat resta cliccabile, e quando il
+  // giro è concluso (bRoundClosed) non si apre niente.
+  const next = bExpectedSeatIdx();
+  if(next >= 0) bSeatClick(next);
+}
+
+function bRenderPop(){
+  const el = document.getElementById('bld-pop');
+  if(!el) return;
+  if(!bPop.open || !gs){ el.className=''; el.innerHTML=''; return; }
+
+  const s  = gs.seats[bPop.seat];
+  const fs = bFrontierSeats()[bPop.seat];
+  const maxBet = Math.max(...bFrontierSeats().map(x=>x.bet));
+  const toCall = Math.max(0, maxBet - fs.bet);
+  const col = POS_COLOR[s.pos] || '#666666';
+
+  let h = `<div class="bp-head">
+      <span class="bp-name">${bEsc(s.name)}</span>
+      ${s.pos?`<span class="bp-pos" style="color:${col};border-color:${col}">${s.pos}</span>`:''}
+      <button class="bld-x" style="font-size:15px;padding:0 2px" onclick="bClosePop()" title="Chiudi">✕</button>
+    </div>
+    <div class="bp-sub">stack ${fmtStack(fs.stack)}${fs.bet?' · bet '+fmtStack(fs.bet):''}${toCall?' · call '+fmtStack(toCall):''}</div>`;
+
+  if(!bPop.mode){
+    h += `<div class="bp-grid">
+      <button class="bp-b" onclick="bPopPick('fold')">Fold</button>
+      <button class="bp-b" onclick="bPopPick('check')">Check</button>
+      <button class="bp-b" onclick="bPopPick('call')">Call${toCall?' '+fmtStack(toCall):''}</button>
+      <button class="bp-b" onclick="bPopPick('bet')">Bet</button>
+      <button class="bp-b" onclick="bPopPick('raise')">Raise</button>
+      <button class="bp-b" onclick="bPopPick('allin')">All-in</button>
+    </div>`;
+  } else {
+    const dis  = bPop.mode==='allin' ? 'disabled' : '';
+    const unit = bSizeUnit();
+    h += `<div class="bp-lab">${BLD_ACT_LABEL[bPop.mode].toUpperCase()} — SIZE IN ${unit==='bb'?'BB':'CHIPS'}</div>
+      <input id="bp-amt" class="bld-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
+             value="${bToInput(bPop.amount)}" ${dis}
+             oninput="bPopEq(this.value)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();bPopConfirm();}">
+      ${unit==='bb' ? `<div class="bp-eq" id="bp-eq">= ${fmt(bPop.amount)} chips</div>` : ''}
+      <div class="bp-grid" style="margin-top:6px">
+        <button class="bp-b" onclick="bPopBack()">← Indietro</button>
+        <button class="bp-b prim" onclick="bPopConfirm()">Conferma</button>
+      </div>`;
+  }
+  el.innerHTML = h;
+  el.className = 'visible';
+  bPositionPop();
+  const inp = document.getElementById('bp-amt');
+  if(inp && !inp.disabled){ inp.focus(); inp.select(); }
+}
+
+// Posiziona il popup accanto al seat, senza uscire dal canvas
+function bPositionPop(){
+  const el = document.getElementById('bld-pop');
+  const wrap = document.getElementById('canvas-wrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const pos = seatPositions(gs.seats, W, H);
+  const m   = seatBlockMetrics(W, H);
+  const { x, y } = pos[bPop.seat];
+  const blockTop    = y - m.blockH/2;              // bordo superiore delle carte
+  const plateBottom = y + m.blockH/2;
+  const pw = el.offsetWidth, ph = el.offsetHeight;
+  const pad = 6, gap = 8;
+  const fits = (l,t) => l>=pad && t>=pad && l+pw<=W-pad && t+ph<=H-pad;
+
+  // ordine di preferenza: sotto → destra → sinistra → sopra le carte.
+  // In ogni caso il popup non copre mai le hole cards del player.
+  const cands = [
+    [Math.round(x-pw/2),          Math.round(plateBottom+gap)],
+    [Math.round(x+m.pw/2+gap),    Math.round(y-ph/2)],
+    [Math.round(x-m.pw/2-gap-pw), Math.round(y-ph/2)],
+    [Math.round(x-pw/2),          Math.round(blockTop-gap-ph)]
+  ];
+  let best = cands.find(([l,t]) => fits(l,t));
+  if(!best){   // nessuna posizione libera: ripiega sotto, rientrando nei bordi
+    const [l,t] = cands[0];
+    best = [ Math.max(pad, Math.min(l, W-pw-pad)), Math.max(pad, Math.min(t, H-ph-pad)) ];
+  }
+  el.style.left = best[0]+'px';
+  el.style.top  = best[1]+'px';
+}
+
+function bPopPick(type){
+  if(type==='fold' || type==='check'){ bAddAction(bPop.seat, type, 0); return; }
+  bPop.mode   = type;
+  bPop.amount = bDefaultAmount(bPop.seat, type);
+  bRenderPop();
+}
+function bPopBack(){ bPop.mode=null; bRenderPop(); }
+// equivalente in chips mostrato sotto il campo quando si lavora in BB
+function bPopEq(v){
+  const el = document.getElementById('bp-eq');
+  if(el) el.textContent = '= ' + fmt(bFromInput(v)) + ' chips';
+}
+function bPopConfirm(){
+  const inp = document.getElementById('bp-amt');
+  let amt = bPop.amount;                      // all-in: valore calcolato, in chips
+  if(inp && !inp.disabled){
+    // se il valore non è stato toccato si riusa l'importo esatto in chips,
+    // altrimenti l'arrotondamento a 2 decimali dei BB lo falserebbe di poco
+    const v = String(inp.value).trim();
+    amt = (v === String(bToInput(bPop.amount))) ? bPop.amount : bFromInput(v);
+  }
+  bAddAction(bPop.seat, bPop.mode, amt);
+}
+function bClosePop(){
+  bPop = { open:false, seat:-1, mode:null, amount:0 };
+  bSelSeat = -1;
+  bRenderPop();
+  bLayoutOverlay();
+  bUpdateBuilderBar();
+}
+
+// click fuori dal popup = chiudi.
+// Si usa composedPath(): i bottoni interni vengono rimossi dal DOM dal
+// re-render del popup, e un closest() su un nodo staccato darebbe "fuori".
+document.addEventListener('click', e=>{
+  if(!bPop.open) return;
+  const path = (e.composedPath && e.composedPath()) || (e.target ? [e.target] : []);
+  const inside = path.some(n => n && n.nodeType===1 &&
+    (n.id==='bld-pop' || (n.classList && n.classList.contains('bld-hit'))));
+  if(!inside) bClosePop();
+});
+
+// L'overlay deve riallinearsi a ogni cambio di dimensione del canvas
+(function bWatchCanvasResize(){
+  const wrap = document.getElementById('canvas-wrap');
+  if(!wrap) return;
+  if(typeof ResizeObserver !== 'undefined') new ResizeObserver(()=>{ if(builderMode) bLayoutOverlay(); }).observe(wrap);
+  else window.addEventListener('resize', ()=>{ if(builderMode) bLayoutOverlay(); });
+})();
+
+// Intestazione della mano in costruzione (equivalente a quella di selectHand)
+function bRenderMeta(){
+  const h = gs.header;
+  document.getElementById('hand-meta').innerHTML =
+    `<span style="background:#555;color:#fff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;flex-shrink:0;">${h.room||'Manuale'}</span>`
+    + ` &nbsp;·&nbsp; Lv ${h.level} &nbsp;·&nbsp; ${fmt(h.sb)}/${fmt(h.bb)}`
+    + (h.ante ? ` &nbsp;·&nbsp; Ante ${fmt(h.ante)}` : '');
+}
+
+// Uscita dalla modalità builder senza salvare
+function bExitBuilder(){
+  if(!confirm('Uscire dal builder? La mano in costruzione andrà persa.')) return;
+  bLeaveBuilderMode();
+  if(allHands.length){ selectHand(Math.min(curHandIdx<0?0:curHandIdx, allHands.length-1)); }
+  else {
+    gs=null; steps=[]; cur=0;
+    document.getElementById('replayer').className='';
+    document.getElementById('input-panel').style.display='block';
+  }
+}
+// Spegne solo lo stato/UI della modalità (senza chiedere conferma)
+function bLeaveBuilderMode(){
+  builderMode = false;
+  bSelSeat = -1;
+  bPop = { open:false, seat:-1, mode:null, amount:0 };
+  bRenderPop();       // chiude il popup
+  document.body.classList.remove('builder-mode');
+  bLayoutOverlay();   // svuota le hitbox
+}
+
+// ── RENDER: SETUP (fase 1) ──────────────────────────────────────
+function renderBuilder(){
+  document.getElementById('bld-n').innerHTML =
+    [2,3,4,5,6,7,8,9,10].map(v=>`<option value="${v}"${v===B.n?' selected':''}>${v} player</option>`).join('');
+  document.getElementById('bld-sb').value = B.sb;
+  document.getElementById('bld-bb').value = B.bb;
+  document.getElementById('bld-ante').value = B.ante;
+  document.getElementById('bld-ante-mode').value = B.anteMode;
+  renderBuilderPlayers();
+}
+
+function bSetField(f,v){ B[f]=Math.max(0,Math.round(+v||0)); }
+function bSetAnteMode(v){ B.anteMode=v; }
+function bSetHero(seat){ B.heroSeat=seat; renderBuilderPlayers(); }
+function bSetBtn(seat){ B.btnSeat=seat; renderBuilderPlayers(); }
+
+function bSetN(n){
+  const old = B.players;
+  const players = [];
+  for(let i=0;i<n;i++){
+    players.push(old[i] || { seat:i+1, name:'Player '+(i+1), stack:(old[0]?old[0].stack:10000), cards:[null,null] });
+  }
+  B.players = players;
+  B.n = n;
+  if(B.btnSeat  > n) B.btnSeat  = n;
+  if(B.heroSeat > n) B.heroSeat = 1;
+  renderBuilder();
+}
+
+// ── RENDER: PLAYER ──────────────────────────────────────────────
+function renderBuilderPlayers(){
+  const pos = bPositions();
+  document.getElementById('bld-players').innerHTML = B.players.map((p,i)=>{
+    const col = POS_COLOR[pos[i]] || '#666666';
+    return `<div class="bld-prow">
+      <input type="radio" name="bld-hero" ${p.seat===B.heroSeat?'checked':''} onchange="bSetHero(${p.seat})" title="Hero">
+      <input class="bld-in" value="${bEsc(p.name)}" maxlength="24"
+             oninput="B.players[${i}].name=this.value">
+      <input class="bld-in" type="number" min="0" step="1" value="${Math.round(+p.stack||0)}"
+             oninput="B.players[${i}].stack=Math.max(0,Math.round(+this.value||0))">
+      <input type="radio" name="bld-btn" ${p.seat===B.btnSeat?'checked':''} onchange="bSetBtn(${p.seat})" title="Bottone">
+      <span class="bld-posb" style="color:${col};border-color:${col}">${pos[i]||'—'}</span>
+      <span style="display:flex;gap:4px;">${bCardSlot('hole',i,0)}${bCardSlot('hole',i,1)}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── CARD PICKER (riutilizzabile) ────────────────────────────────
+// kind 'hole' = slot del setup (fase 1). Nella fase 2 si aggiungono
+// i target del tavolo, che leggono/scrivono direttamente in gs.
+function bCardAt(kind,a,b){
+  if(kind==='hole')   return B.players[a].cards[b];       // slot del setup (fase 1)
+  if(kind==='tboard') return gs.board[a] || null;          // board sul tavolo
+  if(kind==='thole')  return bSeatCards(a)[b] || null;     // hole cards sul tavolo
+  return null;
+}
+// Tutte le carte già impegnate, per disabilitarle nel picker.
+// In fase 2 la fonte è gs, in fase 1 il setup.
+function bUsedCards(){
+  const used = new Set();
+  const add = c => { if(c) used.add(c); };
+  if(builderMode && gs){
+    (gs.board||[]).forEach(add);
+    Object.values(gs.showdown||{}).forEach(cs=>cs.forEach(add));
+    Object.values(gs.holeCards||{}).forEach(cs=>cs.forEach(add));
+  } else if(B){
+    B.players.forEach(p=>p.cards.forEach(add));
+  }
+  return used;
+}
+
+function bCardSlot(kind,a,b){
+  const c = bCardAt(kind,a,b);
+  const click = `openCardPicker('${kind}',${a},${b})`;
+  if(!c) return `<button class="bld-card" onclick="${click}" title="Scegli carta">+</button>`;
+  const suit = c.slice(-1), rank = RANK[c.slice(0,-1)] || c.slice(0,-1);
+  return `<button class="bld-card filled" style="background:${SUIT_BG[suit]||'#333'}" onclick="${click}" title="Cambia carta">${rank}<i>${SYM[suit]||''}</i></button>`;
+}
+
+function openCardPicker(kind,a,b,title){
+  bCardTarget = {kind,a,b};
+  const curCard = bCardAt(kind,a,b);
+  const used = bUsedCards();          // una carta già usata non è riselezionabile
+  if(curCard) used.delete(curCard);
+
+  document.getElementById('cp-title').textContent =
+    title || (kind==='hole' ? 'Carta di ' + bName(a) : 'Scegli una carta');
+  document.getElementById('cp-grid').innerHTML = BLD_SUITS.map(su =>
+    BLD_RANKS.map(r=>{
+      const c = r+su, dis = used.has(c);
+      return `<button class="cp-c${curCard===c?' sel':''}" style="background:${SUIT_BG[su]}"
+        ${dis?'disabled':''} onclick="bPickCard('${c}')">${RANK[r]||r}<i>${SYM[su]}</i></button>`;
+    }).join('')
+  ).join('');
+  document.getElementById('cp-clear').style.display = curCard ? '' : 'none';
+  document.getElementById('cp-overlay').className='visible';
+}
+function closeCardPicker(){ document.getElementById('cp-overlay').className=''; bCardTarget=null; }
+function bPickCard(c){ bAssignCard(c); }
+function bClearCard(){ bAssignCard(null); }
+function bAssignCard(c){
+  if(!bCardTarget) return;
+  const t = bCardTarget;
+  closeCardPicker();
+  if(t.kind==='hole'){ B.players[t.a].cards[t.b] = c; renderBuilderPlayers(); return; }
+  if(t.kind==='tboard'){ bSetBoardCard(t.a, c); return; }
+  if(t.kind==='thole'){ bSetSeatCard(t.a, t.b, c); return; }
+}
+
+// ── ESC: chiude picker / builder ────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Escape') return;
+  if(document.getElementById('cp-overlay').className==='visible'){ closeCardPicker(); return; }
+  if(bPop.open){ bClosePop(); return; }
+  if(document.getElementById('builder-overlay').className==='visible') closeBuilder();
+});
 
 </script>
 </body>
