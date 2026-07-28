@@ -303,17 +303,49 @@ body.builder-mode #bld-overlay { display:block; }
   position:absolute; pointer-events:auto; cursor:pointer; border-radius:4px;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   border:1.5px dashed rgba(255,255,255,.32); color:rgba(255,255,255,.45);
-  font-size:17px; font-weight:700; line-height:1.05; transition:all .12s;
+  font-size:var(--slot-fs,17px); font-weight:700; line-height:1.05; transition:all .12s;
 }
 .bld-slot:hover { border-color:#ffffff; color:#ffffff; background:rgba(255,255,255,.08); }
 /* carta già disegnata dal canvas: solo hitbox trasparente */
 .bld-slot.over  { border:1.5px solid transparent; color:transparent; }
 .bld-slot.over:hover { border-color:#ffffff; background:rgba(255,255,255,.07); }
-/* carta inserita ma non ancora in gioco sullo step mostrato: anteprima attenuata,
-   così si distingue dalle carte davvero sul tavolo in quel momento */
-.bld-slot.card  { border:1.5px dashed rgba(255,255,255,.5); color:#ffffff; font-weight:900; opacity:.5; }
-.bld-slot.card:hover { opacity:.85; }
-.bld-slot.card i { font-style:normal; font-size:10px; opacity:.85; }
+/* carta inserita ma non ancora in gioco sullo step mostrato: mostra il contenuto con stile carta piena */
+.bld-slot.card {
+  border:1.5px solid rgba(255,255,255,.22);
+  color:#ffffff;
+  font-weight:900;
+  opacity:1;
+  background-clip:padding-box;
+  padding:0;
+}
+.bld-slot.card:hover {
+  box-shadow:0 0 0 2px rgba(255,255,255,.12);
+}
+/* stessa impaginazione di drawCard: rango al centro, seme in alto a destra,
+   corpi scalati sulla larghezza della carta (vedi bSlotHtml) */
+.bld-slot.card .bld-slot-card-inner {
+  width:100%;
+  height:100%;
+  position:relative;
+  border-radius:4px;
+  background:rgba(0,0,0,.12);
+}
+.bld-slot.card .card-rank {
+  position:absolute; left:0; right:0; top:56%; transform:translateY(-50%);
+  text-align:center;
+  font-size:var(--rank-fs,18px);
+  font-weight:900;
+  line-height:1;
+}
+.bld-slot.card .card-suit {
+  position:absolute; top:3px; right:4px;
+  font-size:var(--suit-fs,16px);
+  line-height:1;
+  opacity:.85;
+}
+.bld-slot.card > * {
+  pointer-events:none;
+}
 /* slot non ancora raggiungibile (il board si riempie in ordine) */
 .bld-slot.locked { pointer-events:none; border-color:rgba(255,255,255,.08); color:transparent; }
 
@@ -346,6 +378,18 @@ body.builder-mode #builder-bar {
   height:34px; padding:0 14px; background:var(--surface2);
   border-left:1px solid var(--border); border-right:1px solid var(--border);
   border-bottom:1px solid var(--border2);
+}
+#builder-bar .builder-controls {
+  display:flex; align-items:center; gap:10px; flex-shrink:0;
+}
+#builder-bar .builder-control {
+  display:flex; align-items:center; gap:6px; color:var(--text2); font-size:11px;
+}
+#builder-bar .builder-control select,
+#builder-bar .builder-control input {
+  min-width:64px; border:1px solid var(--border2); border-radius:6px;
+  background:#090909; color:#ffffff; padding:4px 8px; height:28px;
+  font-size:11px;
 }
 .bb-tag { font-size:10px; font-weight:800; letter-spacing:.08em; color:#ffffff; white-space:nowrap; }
 .bb-street {
@@ -461,9 +505,16 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
       </div>
       <!-- BARRA MODALITÀ BUILDER (visibile solo durante la costruzione) -->
       <div id="builder-bar">
-        <span class="bb-tag">● BUILDER</span>
-        <span class="bb-street" id="bb-street">PREFLOP</span>
+        <span class="bb-tag">● TABLE SETTINGS</span>
         <span class="bb-info" id="bb-info">Clicca un player per inserire un'azione</span>
+        <div class="builder-controls">
+          <label class="builder-control">Players
+            <select id="builder-table-players" class="bld-in" onchange="bSetNFromTable(+this.value)"></select>
+          </label>
+          <label class="builder-control">BB
+            <input id="builder-table-bb" class="bld-in" type="number" min="1" step="1" oninput="bSetBbFromTable(this.value)">
+          </label>
+        </div>
         <div style="flex:1"></div>
         <button class="btn-ghost" onclick="bExitBuilder()">✕ Esci</button>
       </div>
@@ -1739,6 +1790,33 @@ function drawTable(ctx, W, H) {
   tableRect(ctx, cx, cy, tw, th, cr - 3);
   ctx.fillStyle = '#1c1c1c'; ctx.fill();
 
+  // Felt surface: suede grain + logo watermark (clipped to the felt)
+  ctx.save();
+  tableRect(ctx, cx, cy, tw, th, cr - 3);
+  ctx.clip();
+
+  // Suede grain
+  const pat = ctx.createPattern(feltGrainTile(), 'repeat');
+  if (pat) {
+    ctx.save();
+    ctx.globalAlpha = .5;
+    ctx.fillStyle = pat;
+    ctx.fillRect(cx - tw/2, cy - th/2, tw, th);
+    ctx.restore();
+  }
+
+  // Soft nap sheen (top-left lighter, bottom-right darker)
+  const sheen = ctx.createLinearGradient(cx - tw/2, cy - th/2, cx + tw/2, cy + th/2);
+  sheen.addColorStop(0,   'rgba(255,255,255,.035)');
+  sheen.addColorStop(.45, 'rgba(255,255,255,.008)');
+  sheen.addColorStop(1,   'rgba(0,0,0,.10)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(cx - tw/2, cy - th/2, tw, th);
+
+  // Logo watermark
+  drawFeltLogo(ctx, cx, cy, tw * .42);
+  ctx.restore();
+
   // Subtle vignette
   ctx.save();
   tableRect(ctx, cx, cy, tw, th, cr - 3);
@@ -1748,6 +1826,114 @@ function drawTable(ctx, W, H) {
   grd.addColorStop(1, 'rgba(0,0,0,.25)');
   ctx.fillStyle = grd;
   ctx.fillRect(cx - tw/2, cy - th/2, tw, th);
+  ctx.restore();
+}
+
+// ── FELT: grain tile ────────────────────────────────────────────
+let _feltTile = null;
+function feltGrainTile(){
+  if(_feltTile) return _feltTile;
+  const S = 160;
+  const oc = document.createElement('canvas');
+  oc.width = oc.height = S;
+  const octx = oc.getContext('2d');
+  const img = octx.createImageData(S, S);
+  const d = img.data;
+  for(let i = 0; i < S*S; i++){
+    const light = Math.random() < .5;
+    const v = light ? 255 : 0;
+    d[i*4] = d[i*4+1] = d[i*4+2] = v;
+    // sparse fibers slightly stronger than the base grain
+    d[i*4+3] = (Math.random() < .04 ? 30 + Math.random()*26 : Math.random()*22);
+  }
+  octx.putImageData(img, 0, 0);
+  _feltTile = oc;
+  return _feltTile;
+}
+
+// ── FELT: CRUSH THE GAME watermark ──────────────────────────────
+// Drawn in a 1000×420 design space centered on the origin, then scaled.
+function crushLogoShapes(ctx, col){
+  ctx.fillStyle = col; ctx.strokeStyle = col;
+  ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+
+  // Circuit traces
+  const traces = [
+    [[-500, 110], [-444, 110], [-422,  86], [-372,  86]],
+    [[-470,-118], [-416,-118], [-396,-140], [-336,-140]],
+    [[ 500,-110], [ 444,-110], [ 422, -86], [ 372, -86]],
+    [[ 470, 118], [ 416, 118], [ 396, 140], [ 336, 140]],
+    [[ 140,-150], [ 236,-150], [ 262,-178], [ 350,-178]],
+    [[-140, 150], [-236, 150], [-262, 178], [-350, 178]]
+  ];
+  ctx.lineWidth = 6;
+  for(const t of traces){
+    ctx.beginPath();
+    ctx.moveTo(t[0][0], t[0][1]);
+    for(let i = 1; i < t.length; i++) ctx.lineTo(t[i][0], t[i][1]);
+    ctx.stroke();
+    const e = t[0];
+    ctx.fillRect(e[0] - (e[0] < 0 ? 0 : 14), e[1] - 7, 14, 14);
+  }
+
+  // Angular shards flanking the wordmark
+  const shards = [
+    [[-430, -96], [-336, -70], [-424, -48]],
+    [[-410, -28], [-322,  -8], [-404,  18]],
+    [[-378,  38], [-310,  56], [-370,  78]],
+    [[ 430, -96], [ 336, -70], [ 424, -48]],
+    [[ 410, -28], [ 322,  -8], [ 404,  18]],
+    [[ 378,  38], [ 310,  56], [ 370,  78]]
+  ];
+  for(const s of shards){
+    ctx.beginPath();
+    ctx.moveTo(s[0][0], s[0][1]);
+    for(let i = 1; i < s.length; i++) ctx.lineTo(s[i][0], s[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Chevron accent above the wordmark
+  ctx.beginPath();
+  ctx.moveTo(-40, -132); ctx.lineTo(40, -132); ctx.lineTo(64, -158); ctx.lineTo(112, -158);
+  ctx.lineTo(103, -142); ctx.lineTo(53, -142); ctx.lineTo(30, -116); ctx.closePath();
+  ctx.fill();
+
+  // CRUSH
+  ctx.save();
+  ctx.transform(1, 0, -0.14, 1, 0, 0); // italic skew
+  ctx.font = "900 150px 'Arial Black','Segoe UI',Impact,sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('CRUSH', 0, 22);
+  ctx.restore();
+
+  // THE GAME plate
+  const py = 48, pb = 106, px = 200, cut = 22;
+  ctx.beginPath();
+  ctx.moveTo(-px + cut, py); ctx.lineTo(px, py); ctx.lineTo(px - cut, pb);
+  ctx.lineTo(-px, pb); ctx.closePath();
+  ctx.lineWidth = 6; ctx.stroke();
+
+  ctx.save();
+  ctx.transform(1, 0, -0.14, 1, 0, 0);
+  ctx.font = "900 46px 'Arial Black','Segoe UI',Impact,sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if('letterSpacing' in ctx) ctx.letterSpacing = '9px';
+  ctx.fillText('THE GAME', 0, (py + pb)/2 + 2);
+  if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  ctx.restore();
+}
+function drawFeltLogo(ctx, cx, cy, w){
+  const u = w / 1000;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(u, u);
+  // deboss shadow, then the light face on top
+  ctx.save();
+  ctx.translate(6, 6);
+  crushLogoShapes(ctx, 'rgba(0,0,0,.55)');
+  ctx.restore();
+  crushLogoShapes(ctx, 'rgba(255,255,255,.07)');
   ctx.restore();
 }
 
@@ -2567,20 +2753,66 @@ let builderMode = false;     // true = il tavolo è in costruzione (fase 2)
 
 // ── STATO SETUP (fase 1) ────────────────────────────────────────
 function bDefaultState(n){
+  const defaultBb = 100;
+  const defaultSb = Math.max(1, Math.round(defaultBb / 2));
   const players = [];
-  for(let i=0;i<n;i++) players.push({ seat:i+1, name:'Player '+(i+1), stack:10000, cards:[null,null] });
-  return { n, btnSeat:1, heroSeat:1, sb:100, bb:200, ante:0, anteMode:'all', players };
+  for(let i=0;i<n;i++) players.push({ seat:i+1, name:'Player '+(i+1), stack:defaultBb * 100, cards:[null,null] });
+  return { n, btnSeat:1, heroSeat:1, sb:defaultSb, bb:defaultBb, ante:0, anteMode:'all', players };
+}
+
+function bRenderBuilderBarControls(){
+  const select = document.getElementById('builder-table-players');
+  const bbInput = document.getElementById('builder-table-bb');
+  if(select){
+    select.innerHTML = [2,3,4,5,6,7,8,9,10].map(v =>
+      `<option value="${v}"${v===B.n?' selected':''}>${v}</option>`
+    ).join('');
+    select.value = B.n;
+  }
+  if(bbInput){
+    bbInput.value = Math.max(1, Math.round(+B.bb||100));
+  }
+}
+
+function bSetNFromTable(n){
+  if(!B || n===B.n) return;
+  const hasState = gs && (gs.board.length || Object.values(gs.actions||{}).some(arr=>arr.length>0));
+  if(hasState && !confirm('Cambiare numero di giocatori resetta la mano in costruzione. Continuare?')) return;
+  B = bDefaultState(n);
+  if(builderMode){
+    gs = bInitialGs();
+    bRenderMeta();
+    bRefreshSteps(true);
+  }
+  bRenderBuilderBarControls();
+}
+
+function bSetBbFromTable(v){
+  if(!B) return;
+  const newBb = Math.max(1, Math.round(+v||1));
+  if(newBb===B.bb) return;
+  const oldBb = Math.max(1, Math.round(+B.bb||100));
+  const resetStacks = B.players.every(p => Math.round(p.stack) === oldBb * 100);
+  B.bb = newBb;
+  if(resetStacks){
+    B.players.forEach(p => { p.stack = newBb * 100; });
+  }
+  if(builderMode){
+    gs = bInitialGs();
+    bRenderMeta();
+    bRefreshSteps(true);
+  }
+  bRenderBuilderBarControls();
 }
 
 function openBuilder(){
-  // se una costruzione è già in corso, va abbandonata prima di ripartire dal setup
+  // se una costruzione è già in corso, va abbandonata prima di iniziare una nuova mano
   if(builderMode){
-    if(!confirm('Una mano è già in costruzione sul tavolo. Ricominciare dal setup? La mano in corso andrà persa.')) return;
+    if(!confirm('Una mano è già in costruzione sul tavolo. Aprire una nuova mano cancellerà quella in corso. Continuare?')) return;
     bLeaveBuilderMode();
   }
   if(!B) B = bDefaultState(6);
-  document.getElementById('builder-overlay').className='visible';
-  renderBuilder();
+  bGoToTable();
 }
 function closeBuilder(){ document.getElementById('builder-overlay').className=''; }
 function bResetBuilder(){
@@ -2763,6 +2995,7 @@ function bGoToTable(){
   document.getElementById('replayer').className='visible';
   renderSidebar();
   bRenderMeta();
+  bRenderBuilderBarControls();
   cur = 0;
   bRefreshSteps(true);
 }
@@ -2787,20 +3020,24 @@ function bRefreshSteps(goLast){
   goToStep(goLast ? steps.length-1 : Math.min(cur, steps.length-1));
   bLayoutOverlay();
   bUpdateBuilderBar();
+  bRenderBuilderBarControls();
 }
 
 // Barra di stato della modalità builder
 function bUpdateBuilderBar(){
   if(!builderMode) return;
   const st = bCurStreet();
-  document.getElementById('bb-street').textContent = (BLD_STREETS.find(s=>s[0]===st)||['','?'])[1];
+  // il badge dello street è opzionale: la barra può non averlo
+  const street = document.getElementById('bb-street');
+  if(street) street.textContent = (BLD_STREETS.find(s=>s[0]===st)||['','?'])[1];
   const nAct = BLD_STREETS.reduce((t,[k])=>t+((gs.actions[k]||[]).length),0);
   const turn = bExpectedSeatIdx();
   const parts = [ nAct===0 ? 'Nessuna azione inserita' : nAct+(nAct===1?' azione inserita':' azioni inserite') ];
   if(turn>=0) parts.push('tocca a ' + gs.seats[turn].name);
   else if(nAct>0 && bRoundClosed()) parts.push('giro completo');
   if(bSelSeat>=0) parts.push('selezionato: ' + gs.seats[bSelSeat].name);
-  document.getElementById('bb-info').textContent = parts.join(' · ');
+  const info = document.getElementById('bb-info');
+  if(info) info.textContent = parts.join(' · ');
 }
 
 // ── HITBOX SUL TAVOLO ───────────────────────────────────────────
@@ -2937,12 +3174,18 @@ function bSeatCards(i){
 }
 function bCardFace(c){
   const suit = c.slice(-1), rank = RANK[c.slice(0,-1)] || c.slice(0,-1);
-  return { bg: SUIT_BG[suit] || '#333333', html: `${rank}<i>${SYM[suit]||''}</i>` };
+  return { bg: SUIT_BG[suit] || '#333333', html: `<span class="card-rank">${rank}</span><span class="card-suit">${SYM[suit]||''}</span>` };
 }
 function bSlotHtml(cls, l, t, w, h, onclick, inner, bg, title){
+  const content = cls==='card' ? `<div class="bld-slot-card-inner">${inner||''}</div>` : (inner||'');
+  // corpi tipografici agganciati alla larghezza dello slot, con gli stessi
+  // rapporti di drawCard: così l'anteprima non cambia stile al crescere dello schermo
+  const fs = `--rank-fs:${(Math.max(13, w*.68)).toFixed(1)}px;`
+           + `--suit-fs:${(Math.max(7, w*.26)).toFixed(1)}px;`
+           + `--slot-fs:${(Math.max(13, w*.45)).toFixed(1)}px`;
   return `<div class="bld-slot${cls?' '+cls:''}"
-    style="left:${l}px;top:${t}px;width:${w}px;height:${h}px${bg?';background:'+bg:''}"
-    ${onclick?`onclick="${onclick}"`:''}${title?` title="${title}"`:''}>${inner||''}</div>`;
+    style="left:${l}px;top:${t}px;width:${w}px;height:${h}px;${fs}${bg?';background:'+bg:''}"
+    ${onclick?`onclick="${onclick}"`:''}${title?` title="${title}"`:''}>${content}</div>`;
 }
 
 // ── CLICK SU BOARD E HOLE CARDS ─────────────────────────────────
@@ -3124,7 +3367,20 @@ function bRenderPop(){
       <button class="bp-b" onclick="bPopPick('bet')">Bet</button>
       <button class="bp-b" onclick="bPopPick('raise')">Raise</button>
       <button class="bp-b" onclick="bPopPick('allin')">All-in</button>
+      <button class="bp-b" onclick="bPopPick('stack')">Stack</button>
     </div>`;
+  } else if(bPop.mode==='stack') {
+    const unit = bSizeUnit();
+    h += `<div class="bp-lab">STACK IN ${unit==='bb'?'BB':'CHIPS'}</div>
+      <input id="bp-amt" class="bld-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
+             value="${bToInput(bPop.amount)}"
+             oninput="bPopEq(this.value)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();bPopConfirm();}">
+      ${unit==='bb' ? `<div class="bp-eq" id="bp-eq">= ${fmt(bPop.amount)} chips</div>` : '<div class="bp-eq" id="bp-eq"></div>'}
+      <div class="bp-grid" style="margin-top:6px">
+        <button class="bp-b" onclick="bPopBack()">← Indietro</button>
+        <button class="bp-b prim" onclick="bPopConfirm()">Conferma</button>
+      </div>`;
   } else {
     const dis  = bPop.mode==='allin' ? 'disabled' : '';
     const unit = bSizeUnit();
@@ -3179,6 +3435,13 @@ function bPositionPop(){
 
 function bPopPick(type){
   if(type==='fold' || type==='check'){ bAddAction(bPop.seat, type, 0); return; }
+  if(type==='stack'){
+    bPop.mode = 'stack';
+    const fs = bFrontierSeats()[bPop.seat];
+    bPop.amount = fs ? fs.stack : 0;
+    bRenderPop();
+    return;
+  }
   bPop.mode   = type;
   bPop.amount = bDefaultAmount(bPop.seat, type);
   bRenderPop();
@@ -3190,6 +3453,22 @@ function bPopEq(v){
   if(el) el.textContent = '= ' + fmt(bFromInput(v)) + ' chips';
 }
 function bPopConfirm(){
+  if(bPop.mode==='stack'){
+    const inp = document.getElementById('bp-amt');
+    let amt = bPop.amount;
+    if(inp){
+      const v = String(inp.value).trim();
+      amt = (v === String(bToInput(bPop.amount))) ? bPop.amount : bFromInput(v);
+    }
+    const seat = gs.seats[bPop.seat];
+    if(seat){
+      seat.stack = amt;
+      seat.chips = amt;
+    }
+    bClosePop();
+    bRefreshSteps(true);
+    return;
+  }
   const inp = document.getElementById('bp-amt');
   let amt = bPop.amount;                      // all-in: valore calcolato, in chips
   if(inp && !inp.disabled){
