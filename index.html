@@ -386,7 +386,8 @@ body.builder-mode #builder-bar {
   display:flex; align-items:center; gap:10px; flex-shrink:0;
 }
 #builder-bar .builder-control {
-  display:flex; align-items:center; gap:6px; color:var(--text2); font-size:11px;
+  display:flex; align-items:center; gap:8px; color:var(--text); font-size:12px;
+  font-weight:600; letter-spacing:.01em; white-space:nowrap;
 }
 #builder-bar .builder-control select,
 #builder-bar .builder-control input {
@@ -400,6 +401,29 @@ body.builder-mode #builder-bar {
   border-radius:3px; padding:2px 7px; white-space:nowrap;
 }
 .bb-info { font-size:10px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* azione principale della barra: piena, per staccare dai controlli ghost */
+#builder-bar .bb-stacks-btn {
+  height:28px; padding:0 14px; flex-shrink:0; cursor:pointer;
+  background:#ffffff; color:#000000; border:1px solid #ffffff; border-radius:6px;
+  font-size:11px; font-weight:800; letter-spacing:.02em; font-family:inherit;
+  white-space:nowrap; transition:opacity .15s, transform .1s;
+}
+#builder-bar .bb-stacks-btn:hover  { opacity:.85; }
+#builder-bar .bb-stacks-btn:active { transform:scale(.97); }
+
+/* editor stack di tutto il tavolo */
+#st-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:220; align-items:center; justify-content:center; }
+#st-overlay.visible { display:flex; }
+#st { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:16px; width:min(420px,94vw); max-height:88vh; overflow-y:auto; }
+.st-hint { font-size:10px; color:var(--text3); margin-bottom:10px; }
+.st-row {
+  display:grid; grid-template-columns:38px 1fr 104px; gap:8px;
+  align-items:center; margin-bottom:6px;
+}
+.st-pos  { font-size:8px; font-weight:700; letter-spacing:.3px; border:1px solid; border-radius:3px; padding:2px 0; text-align:center; }
+.st-name { font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.st-row input { width:100%; font-size:12px; font-family:monospace; text-align:right; padding:6px 8px; }
+.st-eq   { grid-column:2 / -1; font-size:9px; color:var(--text3); font-family:monospace; text-align:right; margin:-4px 0 4px; }
 /* durante la costruzione la lista mani non è selezionabile */
 body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointer-events:none; }
 
@@ -511,12 +535,10 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
         <span class="bb-tag">● TABLE SETTINGS</span>
         <span class="bb-info" id="bb-info">Clicca un player per inserire un'azione</span>
         <div class="builder-controls">
-          <label class="builder-control">Players
+          <label class="builder-control">Numero Players al Tavolo
             <select id="builder-table-players" class="bld-in" onchange="bSetNFromTable(+this.value)"></select>
           </label>
-          <label class="builder-control">BB
-            <input id="builder-table-bb" class="bld-in" type="number" min="1" step="1" oninput="bSetBbFromTable(this.value)">
-          </label>
+          <button class="bb-stacks-btn" onclick="openStacksEditor()" title="Modifica gli stack di tutti i player">✎ Modifica Stacks</button>
         </div>
         <div style="flex:1"></div>
         <button class="btn-ghost" onclick="bExitBuilder()">✕ Esci</button>
@@ -633,6 +655,22 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- EDITOR STACK — modifica in blocco gli stack iniziali del tavolo -->
+  <div id="st-overlay">
+    <div id="st">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="font-size:13px;font-weight:700;color:#fff;">Stack dei player</span>
+        <button class="bld-x" onclick="closeStacksEditor()" title="Chiudi">✕</button>
+      </div>
+      <div class="st-hint" id="st-hint"></div>
+      <div id="st-rows"></div>
+      <div class="modal-footer" style="justify-content:flex-end">
+        <button class="btn-ghost" onclick="closeStacksEditor()">Annulla</button>
+        <button class="btn-primary" onclick="bStacksConfirm()">Conferma</button>
+      </div>
     </div>
   </div>
 
@@ -1695,6 +1733,7 @@ document.addEventListener('keydown',e=>{
     case ' ':          e.preventDefault(); togglePlay(); break;
     case 'Escape':
       if(document.getElementById('guide-overlay').style.display==='flex') closeGuide();
+      else if(document.getElementById('st-overlay').className==='visible') closeStacksEditor();
       break;
   }
 });
@@ -2765,15 +2804,11 @@ function bDefaultState(n){
 
 function bRenderBuilderBarControls(){
   const select = document.getElementById('builder-table-players');
-  const bbInput = document.getElementById('builder-table-bb');
   if(select){
     select.innerHTML = [2,3,4,5,6,7,8,9,10].map(v =>
       `<option value="${v}"${v===B.n?' selected':''}>${v}</option>`
     ).join('');
     select.value = B.n;
-  }
-  if(bbInput){
-    bbInput.value = Math.max(1, Math.round(+B.bb||100));
   }
 }
 
@@ -2790,22 +2825,48 @@ function bSetNFromTable(n){
   bRenderBuilderBarControls();
 }
 
-function bSetBbFromTable(v){
-  if(!B) return;
-  const newBb = Math.max(1, Math.round(+v||1));
-  if(newBb===B.bb) return;
-  const oldBb = Math.max(1, Math.round(+B.bb||100));
-  const resetStacks = B.players.every(p => Math.round(p.stack) === oldBb * 100);
-  B.bb = newBb;
-  if(resetStacks){
-    B.players.forEach(p => { p.stack = newBb * 100; });
-  }
-  if(builderMode){
-    gs = bInitialGs();
-    bRenderMeta();
-    bRefreshSteps(true);
-  }
-  bRenderBuilderBarControls();
+// ── EDITOR STACK DI TUTTO IL TAVOLO ─────────────────────────────
+// Agisce sugli stack iniziali della mano (gs.seats[i].stack), gli stessi che
+// il popup azioni modifica un player alla volta. Le azioni già inserite non
+// vengono toccate: bRefreshSteps ricalcola tutto dai nuovi stack.
+function openStacksEditor(){
+  if(!builderMode || !gs) return;
+  const unit = bSizeUnit();
+  document.getElementById('st-hint').textContent =
+    `Stack iniziali della mano, in ${unit==='bb'?'BB':'chips'}. Le azioni già inserite restano.`;
+  document.getElementById('st-rows').innerHTML = gs.seats.map((s,i)=>{
+    const col = POS_COLOR[s.pos] || '#666666';
+    return `<div class="st-row">
+        ${s.pos?`<span class="st-pos" style="color:${col};border-color:${col}">${s.pos}</span>`:'<span></span>'}
+        <span class="st-name">${bEsc(s.name)}</span>
+        <input class="bld-in st-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
+               data-seat="${i}" value="${bToInput(s.stack)}"
+               oninput="bStacksRowEq(${i},this.value)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();bStacksConfirm();}
+                          else if(event.key==='Escape'){event.preventDefault();closeStacksEditor();}">
+      </div>`
+      + (unit==='bb' ? `<div class="st-eq" id="st-eq-${i}">= ${fmt(s.stack)} chips</div>` : '');
+  }).join('');
+  document.getElementById('st-overlay').className = 'visible';
+  const first = document.querySelector('#st-rows .st-in');
+  if(first){ first.focus(); first.select(); }
+}
+function closeStacksEditor(){ document.getElementById('st-overlay').className = ''; }
+function bStacksRowEq(i, v){
+  const el = document.getElementById('st-eq-'+i);
+  if(el) el.textContent = '= ' + fmt(bFromInput(v)) + ' chips';
+}
+function bStacksConfirm(){
+  if(!gs) return closeStacksEditor();
+  document.querySelectorAll('#st-rows .st-in').forEach(inp=>{
+    const seat = gs.seats[+inp.dataset.seat];
+    if(!seat) return;
+    const amt = bFromInput(inp.value);
+    seat.stack = amt;
+    seat.chips = amt;
+  });
+  closeStacksEditor();
+  bRefreshSteps(true);
 }
 
 function openBuilder(){
@@ -3035,9 +3096,11 @@ function bUpdateBuilderBar(){
   if(street) street.textContent = (BLD_STREETS.find(s=>s[0]===st)||['','?'])[1];
   const nAct = BLD_STREETS.reduce((t,[k])=>t+((gs.actions[k]||[]).length),0);
   const turn = bExpectedSeatIdx();
-  const parts = [ nAct===0 ? 'Nessuna azione inserita' : nAct+(nAct===1?' azione inserita':' azioni inserite') ];
-  if(turn>=0) parts.push('tocca a ' + gs.seats[turn].name);
-  else if(nAct>0 && bRoundClosed()) parts.push('giro completo');
+  // il player atteso è già evidenziato sul tavolo dalla hitbox tratteggiata:
+  // qui restano solo il conteggio e lo stato del giro
+  const parts = [];
+  if(nAct>0) parts.push(nAct + (nAct===1 ? ' azione inserita' : ' azioni inserite'));
+  if(turn<0 && nAct>0 && bRoundClosed()) parts.push('giro completo');
   if(bSelSeat>=0) parts.push('selezionato: ' + gs.seats[bSelSeat].name);
   const info = document.getElementById('bb-info');
   if(info) info.textContent = parts.join(' · ');
