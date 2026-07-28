@@ -72,6 +72,23 @@ body {
 }
 #sidebar-title { font-size:11px; font-weight:700; letter-spacing:.6px; color:var(--text2); }
 #sidebar-count { font-size:14px; font-weight:800; color:#ffffff; font-family:monospace; }
+/* brand in testa alla sidebar. L'arte ha un alone che sul pannello formerebbe
+   un rettangolo sfumato: la si incornicia come placca nera, coerente con i
+   pannelli piatti del tool, invece di lasciarla sbordare */
+#brand {
+  display:block; flex-shrink:0; text-decoration:none;
+  padding:12px 12px 10px; border-bottom:1px solid var(--border);
+}
+#brand-logo {
+  display:block; width:100%; height:auto;
+  background:#000000; border:1px solid var(--border2); border-radius:6px;
+}
+#brand-link {
+  display:block; margin-top:7px; text-align:center;
+  font-size:10px; font-weight:700; letter-spacing:.02em;
+  color:var(--text2); transition:color .15s;
+}
+#brand:hover #brand-link { color:#ffffff; }
 #hand-list { flex:1; overflow-y:auto; padding:6px; min-height:0; }
 #hand-list::-webkit-scrollbar { width:4px; }
 #hand-list::-webkit-scrollbar-track { background:transparent; }
@@ -506,6 +523,11 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
         <span id="sidebar-title">MANI</span>
         <span id="sidebar-count">0</span>
       </div>
+      <!-- brand: logo + link al sito. La src arriva dal data URI già incorporato -->
+      <a id="brand" href="https://www.crushthegame.it" target="_blank" rel="noopener">
+        <img id="brand-logo" alt="Crush The Game">
+        <span id="brand-link">visita www.crushthegame.it</span>
+      </a>
       <div id="pos-filter" style="padding:6px 6px 0;display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;"></div>
       <div id="hand-list"></div>
       <div id="sidebar-add">
@@ -1760,6 +1782,8 @@ const CARD_LOGO = new Image();
 let cardLogoReady = false;
 CARD_LOGO.onload = ()=>{ cardLogoReady = true; if(steps.length) renderCanvas(steps[cur]); };
 CARD_LOGO.src = CARD_LOGO_SRC;
+// stessa bitmap riusata per il brand in sidebar, senza duplicare il data URI
+(()=>{ const el = document.getElementById('brand-logo'); if(el) el.src = CARD_LOGO_SRC; })();
 
 // ── RESIZE OBSERVER — redraws canvas when its physical size changes ──────────
 const _canvasWrap = document.getElementById('canvas-wrap');
