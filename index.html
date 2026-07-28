@@ -309,8 +309,10 @@ body.builder-mode #bld-overlay { display:block; }
 /* carta già disegnata dal canvas: solo hitbox trasparente */
 .bld-slot.over  { border:1.5px solid transparent; color:transparent; }
 .bld-slot.over:hover { border-color:#ffffff; background:rgba(255,255,255,.07); }
-/* carta presente in gs ma non ancora disegnata (flop incompleto): anteprima */
-.bld-slot.card  { border:1.5px solid rgba(255,255,255,.22); color:#ffffff; font-weight:900; }
+/* carta inserita ma non ancora in gioco sullo step mostrato: anteprima attenuata,
+   così si distingue dalle carte davvero sul tavolo in quel momento */
+.bld-slot.card  { border:1.5px dashed rgba(255,255,255,.5); color:#ffffff; font-weight:900; opacity:.5; }
+.bld-slot.card:hover { opacity:.85; }
 .bld-slot.card i { font-style:normal; font-size:10px; opacity:.85; }
 /* slot non ancora raggiungibile (il board si riempie in ordine) */
 .bld-slot.locked { pointer-events:none; border-color:rgba(255,255,255,.08); color:transparent; }
@@ -2895,9 +2897,10 @@ function bLayoutOverlay(){
   });
 
   // ── BOARD ──
-  // Gli slot si mostrano solo sull'ultimo step: sugli step precedenti il canvas
-  // disegna un board diverso e le anteprime risulterebbero fuori posto.
-  if(cur === steps.length-1){
+  // Gli slot restano raggiungibili su qualsiasi step. Le carte già inserite in
+  // gs ma non ancora "in gioco" sullo step visualizzato (flop incompleto, o
+  // board preparato in anticipo) si vedono come anteprima attenuata.
+  {
     const g = bBoardGeom(W,H);
     const drawn = (steps[cur] && steps[cur].board) ? steps[cur].board.length : 0;
     for(let i=0;i<5;i++){
@@ -2908,9 +2911,9 @@ function bLayoutOverlay(){
         // già disegnata dal canvas: solo hitbox per cambiarla/rimuoverla
         html += bSlotHtml('over', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '', '', label+' — cambia o rimuovi carta');
       } else if(c){
-        // presente in gs ma non ancora disegnata (flop incompleto): anteprima
+        // inserita ma non ancora in gioco su questo step: anteprima attenuata
         const f = bCardFace(c);
-        html += bSlotHtml('card', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, f.html, f.bg, label+' — cambia o rimuovi carta');
+        html += bSlotHtml('card', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, f.html, f.bg, label+' — in attesa dello street · cambia o rimuovi');
       } else if(i === gs.board.length){
         html += bSlotHtml('', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '+', '', label+' — scegli carta');
       } else {
@@ -2976,16 +2979,20 @@ function bBoardLenAfter(i){ return i<3 ? Math.min(3, gs.board.length) - 1 : i; }
 // Rimozione di una singola carta. Il flop perde solo quella carta (le altre due
 // restano, l'ordine fra loro è indifferente); turn e river vengono troncati,
 // perché gs.board è posizionale e non può avere buchi.
+// NB: le modifiche al board usano bRefreshSteps(false), cioè NON spostano la
+// vista sul nuovo ultimo step. Saltare in avanti porterebbe allo step "Flop",
+// dove buildSteps azzera i bet (i blind entrano nel piatto): con le azioni
+// preflop non ancora inserite il tavolo sembrerebbe svuotato dei blind.
 function bRemoveBoardCard(i){
   if(!bDropOrphanStreets(bBoardLenAfter(i))) return false;
   gs.board = (i<3) ? gs.board.slice(0,3).filter((_,j)=>j!==i) : gs.board.slice(0,i);
-  bRefreshSteps(true);
+  bRefreshSteps(false);
   return true;
 }
 function bClearBoard(){
   if(!bDropOrphanStreets(0)) return false;
   gs.board = [];
-  bRefreshSteps(true);
+  bRefreshSteps(false);
   return true;
 }
 
@@ -2993,7 +3000,7 @@ function bSetBoardCard(i, card){
   if(!card) return bRemoveBoardCard(i);
   if(i > gs.board.length) return false;      // il board non può avere buchi
   gs.board[i] = card;
-  bRefreshSteps(true);
+  bRefreshSteps(false);
   return true;
 }
 
