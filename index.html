@@ -368,8 +368,11 @@ body.builder-mode #bld-overlay { display:block; }
 .bp-b:hover { border-color:#ffffff; color:#ffffff; }
 .bp-b.prim  { background:#ffffff; border-color:#ffffff; color:#000000; }
 .bp-b.prim:hover { opacity:.85; }
-#bp-amt { width:100%; font-size:13px; font-family:monospace; text-align:center; padding:8px; }
+#bp-amt, #bp-stack { width:100%; font-size:13px; font-family:monospace; text-align:center; padding:8px; }
 .bp-eq  { font-size:10px; color:var(--text3); font-family:monospace; text-align:center; margin-top:4px; }
+/* campo stack sempre presente in testa al popup, separato dalle azioni */
+.bp-stack-box { margin-bottom:9px; padding-bottom:9px; border-bottom:1px solid var(--border); }
+.bp-b.wide { grid-column:1 / -1; }
 
 /* barra modalità builder */
 #builder-bar { display:none; }
@@ -3360,31 +3363,31 @@ function bRenderPop(){
     <div class="bp-sub">stack ${fmtStack(fs.stack)}${fs.bet?' · bet '+fmtStack(fs.bet):''}${toCall?' · call '+fmtStack(toCall):''}</div>`;
 
   if(!bPop.mode){
-    h += `<div class="bp-grid">
+    // Lo stack è sempre in testa e già editabile: si corregge al volo senza
+    // passare da un sotto-menu. Si applica con Invio o uscendo dal campo.
+    const unit = bSizeUnit();
+    h += `<div class="bp-stack-box">
+      <div class="bp-lab">STACK IN ${unit==='bb'?'BB':'CHIPS'}</div>
+      <input id="bp-stack" class="bld-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
+             value="${bToInput(fs.stack)}"
+             oninput="bStackEq(this.value)"
+             onchange="bApplyStack(this.value)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();bApplyStack(this.value);}">
+      ${unit==='bb' ? `<div class="bp-eq" id="bp-stack-eq">= ${fmt(fs.stack)} chips</div>` : ''}
+    </div>
+    <div class="bp-grid">
+      <button class="bp-b" onclick="bPopPick('call')">Call${toCall?' '+fmtStack(toCall):''}</button>
+      <button class="bp-b" onclick="bPopPick(bRaiseType())">Raise</button>
       <button class="bp-b" onclick="bPopPick('fold')">Fold</button>
       <button class="bp-b" onclick="bPopPick('check')">Check</button>
-      <button class="bp-b" onclick="bPopPick('call')">Call${toCall?' '+fmtStack(toCall):''}</button>
-      <button class="bp-b" onclick="bPopPick('bet')">Bet</button>
-      <button class="bp-b" onclick="bPopPick('raise')">Raise</button>
-      <button class="bp-b" onclick="bPopPick('allin')">All-in</button>
-      <button class="bp-b" onclick="bPopPick('stack')">Stack</button>
+      <button class="bp-b wide" onclick="bPopPick('allin')">All-in</button>
     </div>`;
-  } else if(bPop.mode==='stack') {
-    const unit = bSizeUnit();
-    h += `<div class="bp-lab">STACK IN ${unit==='bb'?'BB':'CHIPS'}</div>
-      <input id="bp-amt" class="bld-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
-             value="${bToInput(bPop.amount)}"
-             oninput="bPopEq(this.value)"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();bPopConfirm();}">
-      ${unit==='bb' ? `<div class="bp-eq" id="bp-eq">= ${fmt(bPop.amount)} chips</div>` : '<div class="bp-eq" id="bp-eq"></div>'}
-      <div class="bp-grid" style="margin-top:6px">
-        <button class="bp-b" onclick="bPopBack()">← Indietro</button>
-        <button class="bp-b prim" onclick="bPopConfirm()">Conferma</button>
-      </div>`;
   } else {
     const dis  = bPop.mode==='allin' ? 'disabled' : '';
     const unit = bSizeUnit();
-    h += `<div class="bp-lab">${BLD_ACT_LABEL[bPop.mode].toUpperCase()} — SIZE IN ${unit==='bb'?'BB':'CHIPS'}</div>
+    // "bet" resta la semantica corretta lato hand history, ma a video è un Raise
+    const lab = (bPop.mode==='bet' ? 'Raise' : BLD_ACT_LABEL[bPop.mode]).toUpperCase();
+    h += `<div class="bp-lab">${lab} — SIZE IN ${unit==='bb'?'BB':'CHIPS'}</div>
       <input id="bp-amt" class="bld-in" type="number" min="0" step="${unit==='bb'?'any':'1'}"
              value="${bToInput(bPop.amount)}" ${dis}
              oninput="bPopEq(this.value)"
@@ -3398,8 +3401,47 @@ function bRenderPop(){
   el.innerHTML = h;
   el.className = 'visible';
   bPositionPop();
-  const inp = document.getElementById('bp-amt');
+  const inp = document.getElementById('bp-amt') || document.getElementById('bp-stack');
   if(inp && !inp.disabled){ inp.focus(); inp.select(); }
+}
+
+// Raise e Bet condividono il pulsante: senza puntate davanti la semantica
+// corretta (e il default di size) è quella del bet, altrimenti del raise.
+function bRaiseType(){
+  const maxBet = Math.max(...bFrontierSeats().map(s=>s.bet));
+  return maxBet>0 ? 'raise' : 'bet';
+}
+
+// Stack modificato dal campo in testa al popup: si applica subito, ma il popup
+// resta aperto e non viene ricostruito, altrimenti il click che ha causato il
+// blur (es. su Fold) andrebbe perso insieme al bottone rimosso dal DOM.
+function bStackEq(v){
+  const el = document.getElementById('bp-stack-eq');
+  if(el) el.textContent = '= ' + fmt(bFromInput(v)) + ' chips';
+}
+function bApplyStack(v){
+  if(!bPop.open || !gs) return;
+  const seat = gs.seats[bPop.seat];
+  if(!seat) return;
+  const amt = bFromInput(v);
+  if(amt === seat.stack) return;
+  seat.stack = amt;
+  seat.chips = amt;
+  bRefreshSteps(true);
+  bPopSyncSub();
+}
+// Riallinea la sola riga di riepilogo del popup dopo un cambio di stack
+function bPopSyncSub(){
+  const el = document.querySelector('#bld-pop .bp-sub');
+  if(!el || !bPop.open) return;
+  const seats  = bFrontierSeats();
+  const fs     = seats[bPop.seat];
+  if(!fs) return;
+  const maxBet = Math.max(...seats.map(x=>x.bet));
+  const toCall = Math.max(0, maxBet - fs.bet);
+  el.textContent = `stack ${fmtStack(fs.stack)}`
+    + (fs.bet ? ' · bet '+fmtStack(fs.bet) : '')
+    + (toCall ? ' · call '+fmtStack(toCall) : '');
 }
 
 // Posiziona il popup accanto al seat, senza uscire dal canvas
@@ -3435,13 +3477,6 @@ function bPositionPop(){
 
 function bPopPick(type){
   if(type==='fold' || type==='check'){ bAddAction(bPop.seat, type, 0); return; }
-  if(type==='stack'){
-    bPop.mode = 'stack';
-    const fs = bFrontierSeats()[bPop.seat];
-    bPop.amount = fs ? fs.stack : 0;
-    bRenderPop();
-    return;
-  }
   bPop.mode   = type;
   bPop.amount = bDefaultAmount(bPop.seat, type);
   bRenderPop();
@@ -3453,22 +3488,6 @@ function bPopEq(v){
   if(el) el.textContent = '= ' + fmt(bFromInput(v)) + ' chips';
 }
 function bPopConfirm(){
-  if(bPop.mode==='stack'){
-    const inp = document.getElementById('bp-amt');
-    let amt = bPop.amount;
-    if(inp){
-      const v = String(inp.value).trim();
-      amt = (v === String(bToInput(bPop.amount))) ? bPop.amount : bFromInput(v);
-    }
-    const seat = gs.seats[bPop.seat];
-    if(seat){
-      seat.stack = amt;
-      seat.chips = amt;
-    }
-    bClosePop();
-    bRefreshSteps(true);
-    return;
-  }
   const inp = document.getElementById('bp-amt');
   let amt = bPop.amount;                      // all-in: valore calcolato, in chips
   if(inp && !inp.disabled){
