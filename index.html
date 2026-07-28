@@ -358,6 +358,20 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
 #cp-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:220; align-items:center; justify-content:center; }
 #cp-overlay.visible { display:flex; }
 #cp { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:16px; width:min(680px,94vw); }
+/* striscia di avanzamento del gruppo (flop = 3 carte, hole cards = 2) */
+.cp-group { display:flex; gap:4px; margin-bottom:10px; min-height:0; }
+.cp-group:empty { display:none; }
+.cp-gc {
+  width:28px; height:38px; border-radius:3px; line-height:1.05;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:13px; font-weight:900; color:#ffffff; border:1px solid rgba(255,255,255,.18);
+}
+.cp-gc.empty { border:1px dashed var(--border2); color:var(--text3); font-weight:400; }
+.cp-gc.cur   { outline:2px solid #ffffff; outline-offset:1px; }
+.cp-gc i { font-style:normal; font-size:8px; opacity:.85; }
+.cp-hint { font-size:10px; color:var(--text3); margin-bottom:8px; }
+.cp-hint:empty { display:none; }
+
 .cp-grid { display:grid; grid-template-columns:repeat(13,1fr); gap:4px; }
 .cp-c {
   aspect-ratio:.72; border-radius:3px; border:1px solid rgba(255,255,255,.12); color:#ffffff;
@@ -368,6 +382,8 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
 .cp-c:hover { outline:2px solid #ffffff; }
 .cp-c.sel { outline:2px solid #ffffff; }
 .cp-c:disabled { opacity:.18; cursor:not-allowed; outline:none; }
+.cp-del { border-color:rgba(220,50,50,.4); color:#e06060; }
+.cp-del:hover { border-color:#e06060; color:#ffffff; }
 
 @media (max-width:768px){
   .bld-prow { grid-template-columns:26px 1fr 74px 26px 44px 72px; gap:5px; }
@@ -571,9 +587,14 @@ body.builder-mode #hand-list, body.builder-mode #pos-filter { opacity:.3; pointe
         <span style="font-size:13px;font-weight:700;color:#fff;" id="cp-title">Scegli una carta</span>
         <button class="bld-x" onclick="closeCardPicker()" title="Chiudi">✕</button>
       </div>
+      <div class="cp-group" id="cp-group"></div>
+      <div class="cp-hint" id="cp-hint"></div>
       <div class="cp-grid" id="cp-grid"></div>
-      <div class="modal-footer">
-        <button class="btn-ghost" id="cp-clear" onclick="bClearCard()">Rimuovi carta</button>
+      <div class="modal-footer" style="justify-content:space-between">
+        <div style="display:flex;gap:8px;">
+          <button class="btn-ghost cp-del" id="cp-clear" onclick="bClearCard()">Rimuovi carta</button>
+          <button class="btn-ghost cp-del" id="cp-clear-all" onclick="bClearGroup()">Svuota</button>
+        </div>
         <button class="btn-ghost" onclick="closeCardPicker()">Annulla</button>
       </div>
     </div>
@@ -1586,6 +1607,8 @@ function goToStep(n){
   document.getElementById('action-player').textContent=disp;
   document.getElementById('action-detail').textContent=st.amount||'';
   renderCanvas(st);
+  // in costruzione gli slot del board dipendono dallo step visualizzato
+  if(builderMode) bLayoutOverlay();
 }
 function step(d){ goToStep(cur+d); }
 
@@ -2867,7 +2890,7 @@ function bLayoutOverlay(){
       const l = (k===0 ? x - m.cw : x);
       html += bSlotHtml('over', l, cardTop, m.cw, m.ch,
         `bHoleClick(${i},${k})`, '', '',
-        (cds[k] ? 'Cambia ' : 'Assegna ') + 'carta di ' + bEsc(s.name));
+        cds[k] ? bEsc(s.name)+' — cambia o rimuovi carta' : 'Assegna carta a '+bEsc(s.name));
     });
   });
 
@@ -2883,11 +2906,11 @@ function bLayoutOverlay(){
       const label = i<3 ? 'Flop' : i===3 ? 'Turn' : 'River';
       if(i < drawn){
         // già disegnata dal canvas: solo hitbox per cambiarla/rimuoverla
-        html += bSlotHtml('over', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '', '', label+' — cambia carta');
+        html += bSlotHtml('over', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '', '', label+' — cambia o rimuovi carta');
       } else if(c){
         // presente in gs ma non ancora disegnata (flop incompleto): anteprima
         const f = bCardFace(c);
-        html += bSlotHtml('card', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, f.html, f.bg, label+' — cambia carta');
+        html += bSlotHtml('card', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, f.html, f.bg, label+' — cambia o rimuovi carta');
       } else if(i === gs.board.length){
         html += bSlotHtml('', l, g.by, g.cw, g.ch, `bBoardClick(${i})`, '+', '', label+' — scegli carta');
       } else {
@@ -2933,22 +2956,45 @@ function bHoleClick(i,k){
   openCardPicker('thole', i, idx, gs.seats[i].name + ' — carta ' + (idx+1));
 }
 
-function bSetBoardCard(i, card){
-  if(card){
-    if(i > gs.board.length) return;          // il board non può avere buchi
-    gs.board[i] = card;
-  } else {
-    // rimozione: il board deve restare contiguo, quindi si tronca da i in poi.
-    // Le azioni degli street che spariscono vanno rimosse, altrimenti buildSteps
-    // le eseguirebbe comunque (itera sempre tutti e quattro gli street).
-    const orfane = BLD_STREETS.filter(([k]) => BLD_NEED[k] > i && (gs.actions[k]||[]).length);
-    if(orfane.length && !confirm(
-        'Rimuovendo questa carta si perdono anche le azioni di '
-        + orfane.map(([,l])=>l).join(', ') + '. Continuare?')) return;
-    gs.board = gs.board.slice(0, i);
-    orfane.forEach(([k])=>{ gs.actions[k] = []; });
-  }
+function bBoardLabel(i){ return (i<3?'Flop':i===3?'Turn':'River') + ' — carta ' + (i+1); }
+
+// Con meno carte sul board alcuni street non esistono più: le loro azioni vanno
+// rimosse, altrimenti buildSteps le eseguirebbe comunque (itera sempre tutti
+// e quattro gli street, a prescindere dal board). Ritorna false se l'utente annulla.
+function bDropOrphanStreets(newLen){
+  const orfane = BLD_STREETS.filter(([k]) => BLD_NEED[k] > newLen && (gs.actions[k]||[]).length);
+  if(orfane.length && !confirm(
+      'Con questa rimozione si perdono anche le azioni di '
+      + orfane.map(([,l])=>l).join(', ') + '. Continuare?')) return false;
+  orfane.forEach(([k])=>{ gs.actions[k] = []; });
+  return true;
+}
+
+// Lunghezza del board dopo aver tolto la carta i
+function bBoardLenAfter(i){ return i<3 ? Math.min(3, gs.board.length) - 1 : i; }
+
+// Rimozione di una singola carta. Il flop perde solo quella carta (le altre due
+// restano, l'ordine fra loro è indifferente); turn e river vengono troncati,
+// perché gs.board è posizionale e non può avere buchi.
+function bRemoveBoardCard(i){
+  if(!bDropOrphanStreets(bBoardLenAfter(i))) return false;
+  gs.board = (i<3) ? gs.board.slice(0,3).filter((_,j)=>j!==i) : gs.board.slice(0,i);
   bRefreshSteps(true);
+  return true;
+}
+function bClearBoard(){
+  if(!bDropOrphanStreets(0)) return false;
+  gs.board = [];
+  bRefreshSteps(true);
+  return true;
+}
+
+function bSetBoardCard(i, card){
+  if(!card) return bRemoveBoardCard(i);
+  if(i > gs.board.length) return false;      // il board non può avere buchi
+  gs.board[i] = card;
+  bRefreshSteps(true);
+  return true;
 }
 
 function bSetSeatCard(i, k, card){
@@ -3283,34 +3329,157 @@ function bCardSlot(kind,a,b){
   return `<button class="bld-card filled" style="background:${SUIT_BG[suit]||'#333'}" onclick="${click}" title="Cambia carta">${rank}<i>${SYM[suit]||''}</i></button>`;
 }
 
+// Gruppo di carte a cui appartiene lo slot: il picker resta aperto finché
+// il gruppo non è completo. Flop = 3 carte, hole cards = 2. Turn, river e
+// gli slot del setup sono singoli (nessun gruppo).
+function bPickerGroup(kind,a){
+  if(kind==='tboard' && a<3) return [0,1,2].map(i=>gs.board[i]||null);
+  if(kind==='thole'){ const cs=bSeatCards(a); return [cs[0]||null, cs[1]||null]; }
+  return null;
+}
+
+// Carte che appartengono al gruppo in lavorazione: sono le uniche che si
+// possono deselezionare cliccandole di nuovo nella griglia.
+function bGroupCards(kind,a){
+  if(kind==='hole')   return (B.players[a].cards||[]).filter(Boolean);
+  if(kind==='tboard') return (a<3 ? gs.board.slice(0,3) : [gs.board[a]]).filter(Boolean);
+  if(kind==='thole')  return bSeatCards(a).slice();
+  return [];
+}
+
 function openCardPicker(kind,a,b,title){
   bCardTarget = {kind,a,b};
   const curCard = bCardAt(kind,a,b);
-  const used = bUsedCards();          // una carta già usata non è riselezionabile
-  if(curCard) used.delete(curCard);
+  const used = bUsedCards();          // usata altrove: non riselezionabile
+  const group = new Set(bGroupCards(kind,a));
 
   document.getElementById('cp-title').textContent =
     title || (kind==='hole' ? 'Carta di ' + bName(a) : 'Scegli una carta');
+
+  // anteprima del gruppo: il tavolo è coperto dal picker, così si vede
+  // cosa si è già scelto e quale slot si sta compilando
+  const grp = bPickerGroup(kind,a);
+  const gIdx = (kind==='thole') ? b : a;
+  document.getElementById('cp-group').innerHTML = !grp ? '' : grp.map((c,i)=>{
+    if(!c) return `<div class="cp-gc empty${i===gIdx?' cur':''}">+</div>`;
+    const f = bCardFace(c);
+    return `<div class="cp-gc${i===gIdx?' cur':''}" style="background:${f.bg}">${f.html}</div>`;
+  }).join('');
+  document.getElementById('cp-hint').textContent = group.size
+    ? 'Clicca una carta evidenziata per rimuoverla.' : '';
+
   document.getElementById('cp-grid').innerHTML = BLD_SUITS.map(su =>
     BLD_RANKS.map(r=>{
-      const c = r+su, dis = used.has(c);
-      return `<button class="cp-c${curCard===c?' sel':''}" style="background:${SUIT_BG[su]}"
-        ${dis?'disabled':''} onclick="bPickCard('${c}')">${RANK[r]||r}<i>${SYM[su]}</i></button>`;
+      const c = r+su;
+      // già nel gruppo → cliccabile per deselezionarla
+      if(group.has(c))
+        return `<button class="cp-c sel" style="background:${SUIT_BG[su]}"
+          onclick="bToggleOffCard('${c}')" title="Rimuovi">${RANK[r]||r}<i>${SYM[su]}</i></button>`;
+      // impegnata altrove (altro player o altro street) → non selezionabile
+      if(used.has(c))
+        return `<button class="cp-c" style="background:${SUIT_BG[su]}" disabled>${RANK[r]||r}<i>${SYM[su]}</i></button>`;
+      return `<button class="cp-c" style="background:${SUIT_BG[su]}"
+        onclick="bPickCard('${c}')">${RANK[r]||r}<i>${SYM[su]}</i></button>`;
     }).join('')
   ).join('');
-  document.getElementById('cp-clear').style.display = curCard ? '' : 'none';
+  // Pulsanti di rimozione, con etichette che dichiarano cosa sparisce.
+  // "Rimuovi" agisce sulla singola carta, "Svuota" sull'intero gruppo.
+  const del = document.getElementById('cp-clear');
+  const all = document.getElementById('cp-clear-all');
+  del.style.display = curCard ? '' : 'none';
+  del.textContent = 'Rimuovi carta';
+  all.style.display = 'none';
+  if(kind==='tboard'){
+    const n = gs.board.length - bBoardLenAfter(a);   // quante carte spariscono
+    if(curCard && n>1) del.textContent = `Rimuovi (${n} carte)`;
+    if(gs.board.length){ all.style.display=''; all.textContent = 'Svuota board'; }
+  } else if(kind==='thole'){
+    if(bSeatCards(a).length>1){ all.style.display=''; all.textContent = 'Svuota mano'; }
+  }
   document.getElementById('cp-overlay').className='visible';
 }
 function closeCardPicker(){ document.getElementById('cp-overlay').className=''; bCardTarget=null; }
 function bPickCard(c){ bAssignCard(c); }
 function bClearCard(){ bAssignCard(null); }
+
+// Click su una carta già selezionata nella griglia = deselezione.
+// Il picker resta aperto e si riposiziona sullo slot appena liberato,
+// così si può sostituirla subito.
+function bToggleOffCard(c){
+  const t = bCardTarget;
+  if(!t) return;
+
+  if(t.kind==='hole'){                       // setup (fase 1)
+    const k = B.players[t.a].cards.indexOf(c);
+    if(k<0) return;
+    B.players[t.a].cards[k] = null;
+    renderBuilderPlayers();
+    openCardPicker('hole', t.a, k, 'Carta di ' + bName(t.a));
+    return;
+  }
+
+  if(t.kind==='tboard'){
+    const i = gs.board.indexOf(c);
+    if(i<0) return;
+    if(!bRemoveBoardCard(i)){ openCardPicker('tboard', t.a, 0, bBoardLabel(t.a)); return; }  // annullato
+    // si riparte dal primo slot rimasto vuoto del gruppo
+    const free = (i<3) ? [0,1,2].findIndex(j=>!gs.board[j]) : i;
+    const next = free<0 ? i : free;
+    openCardPicker('tboard', next, 0, bBoardLabel(next));
+    return;
+  }
+
+  if(t.kind==='thole'){
+    const k = bSeatCards(t.a).indexOf(c);
+    if(k<0) return;
+    bSetSeatCard(t.a, k, null);
+    const n = Math.min(bSeatCards(t.a).length, 1);
+    openCardPicker('thole', t.a, n, gs.seats[t.a].name + ' — carta ' + (n+1));
+    return;
+  }
+}
+
+// Svuota l'intero gruppo: tutto il board, oppure la mano di un player
+// (utile per rifare una spiegazione da capo o spostare le carte su un altro seat)
+function bClearGroup(){
+  const t = bCardTarget;
+  if(!t) return;
+  closeCardPicker();
+  if(t.kind==='tboard'){ bClearBoard(); return; }
+  if(t.kind==='thole'){
+    const nm = gs.seats[t.a].name;
+    delete gs.showdown[nm];
+    if(gs.seats[t.a].isHero) delete gs.holeCards[nm];
+    bRefreshSteps(false);
+  }
+}
 function bAssignCard(c){
   if(!bCardTarget) return;
   const t = bCardTarget;
-  closeCardPicker();
-  if(t.kind==='hole'){ B.players[t.a].cards[t.b] = c; renderBuilderPlayers(); return; }
-  if(t.kind==='tboard'){ bSetBoardCard(t.a, c); return; }
-  if(t.kind==='thole'){ bSetSeatCard(t.a, t.b, c); return; }
+
+  // setup (fase 1): slot singolo, si chiude subito
+  if(t.kind==='hole'){ closeCardPicker(); B.players[t.a].cards[t.b] = c; renderBuilderPlayers(); return; }
+
+  if(t.kind==='tboard'){
+    bSetBoardCard(t.a, c);
+    // flop: si passa al prossimo slot vuoto e il picker resta aperto.
+    // Su rimozione, turn e river si chiude subito.
+    if(c && t.a < 3){
+      const next = [0,1,2].find(i => !gs.board[i]);
+      if(next !== undefined){ openCardPicker('tboard', next, 0, 'Flop — carta '+(next+1)); return; }
+    }
+    closeCardPicker(); return;
+  }
+
+  if(t.kind==='thole'){
+    bSetSeatCard(t.a, t.b, c);
+    // hole cards: resta aperto finché il player non ne ha due
+    if(c){
+      const n = bSeatCards(t.a).length;
+      if(n < 2){ openCardPicker('thole', t.a, n, gs.seats[t.a].name+' — carta '+(n+1)); return; }
+    }
+    closeCardPicker(); return;
+  }
 }
 
 // ── ESC: chiude picker / builder ────────────────────────────────
